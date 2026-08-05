@@ -49,6 +49,12 @@ Many small and medium businesses have outdated, slow, or poorly optimized websit
 ### URL Validation
 - Validate format.
 - Reject invalid URLs.
+- Handle edge cases: unreachable sites, anti-bot protection, auth-required pages, timeout after 30s.
+
+### Error Handling
+- Return clear error messages for blocked/inaccessible sites.
+- Log failure reasons for debugging.
+- Provide retry option for transient failures.
 
 ### Screenshot Engine
 - Capture full-page homepage screenshot.
@@ -89,8 +95,11 @@ Export as PDF.
 - Responsive UI
 - Secure URL validation
 - Modular architecture
-- Fast processing
+- Fast processing (target: 60s, but validate with spike test)
 - Easy maintenance
+- Rate limiting (max 10 audits/hour per IP to prevent abuse)
+- Basic logging & observability (audit success/failure, processing time)
+- Cost controls (set OpenAI token limits per audit, track API spend)
 
 ## 8. User Flow
 1. User enters website URL.
@@ -110,6 +119,17 @@ Export as PDF.
 - Leads generated
 - Meetings booked
 - Client conversions
+
+## 10. Cost Model (MVP Estimates)
+| Component | Cost Driver | Estimate |
+|-----------|-------------|----------|
+| OpenAI API | Tokens per audit | ~$0.05–0.15/audit |
+| Vercel | Hosting & serverless | Free tier → Pro ($20/mo) |
+| Supabase | Database reads/writes | Free tier → Pro ($25/mo) |
+| Lighthouse | Runs locally | Free |
+| Playwright | Screenshot capture | Free |
+
+**Budget cap:** Set monthly OpenAI spend limit. Monitor cost per lead.
 
 ## 10. Future Features
 - User accounts
@@ -133,14 +153,15 @@ Frontend:
 Backend:
 - Next.js API Routes
 
-Database:
-- Supabase PostgreSQL
+Database (Supabase PostgreSQL):
+- `audits` table: id, url, scores, ai_insights, pdf_url, created_at
+- `usage` table: ip, audit_count, last_audit_at (for rate limiting)
 
 Automation:
 - n8n
 
 AI:
-- OpenAI API
+- OpenAI API (gpt-4o-mini for cost efficiency)
 
 Screenshot:
 - Playwright
@@ -160,10 +181,11 @@ Deployment:
 - Mobile app
 
 ## 13. Risks
-- AI hallucinations
-- Slow third-party analysis
-- Rate limiting
-- Large websites increasing processing time
+- AI hallucinations → Mitigate with structured prompts and output validation
+- Slow third-party analysis → Run Playwright/Lighthouse in parallel, not sequentially
+- Rate limiting → Implement per-IP limits in MVP
+- Large websites increasing processing time → Cap at top 5 pages for MVP
+- 60-second target may be ambitious → Validate with spike test before full build
 
 ## 14. Definition of Done
 - User can submit a URL.
