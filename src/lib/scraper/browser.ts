@@ -7,15 +7,15 @@ export interface CapturedPageData {
   imageBuffer: Buffer;
 }
 
-export async function capturePageData(targetUrl: string): Promise {
-  const BROWSERLESS_TOKEN = process.env.BROWSERLESS_API_KEY;
+export async function capturePageData(targetUrl: string): Promise<CapturedPageData> {
+  const BROWSERLESS_TOKEN = process.env["BROWSERLESS_API_KEY"];
   if (!BROWSERLESS_TOKEN) {
     throw new Error("Missing BROWSERLESS_API_KEY in environment variables.");
   }
 
   // Connect via WebSocket to Browserless.io
   const browser = await chromium.connectOverCDP(
-    `wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}`
+    `wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}`,
   );
 
   const context = await browser.newContext({
@@ -35,7 +35,7 @@ export async function capturePageData(targetUrl: string): Promise {
     // Dismiss generic cookie banners if present
     await page.evaluate(() => {
       const selectors = [
-        '#onetrust-accept-btn-handler',
+        "#onetrust-accept-btn-handler",
         '[aria-label="Accept cookies"]',
         'button:has-text("Accept")',
         'button:has-text("Allow all")',
@@ -51,8 +51,8 @@ export async function capturePageData(targetUrl: string): Promise {
 
     // Extract Page Metadata
     const title = await page.title();
-    const description = (await page.getAttribute('meta[name="description"]', 'content')) || "";
-    const h1Text = (await page.textContent('h1')) || "";
+    const description = (await page.getAttribute('meta[name="description"]', "content")) || "";
+    const h1Text = (await page.textContent("h1")) || "";
 
     // Capture Full-Page Screenshot
     const imageBuffer = await page.screenshot({

@@ -9,11 +9,11 @@ export interface LighthouseMetrics {
   cumulativeLayoutShift: string;
 }
 
-export async function runLighthouseAudit(targetUrl: string): Promise {
+export async function runLighthouseAudit(targetUrl: string): Promise<LighthouseMetrics> {
   let chrome;
   try {
     chrome = await chromeLauncher.launch({ chromeFlags: ["--headless", "--no-sandbox"] });
-    
+
     const options = {
       logLevel: "error" as const,
       output: "json" as const,
