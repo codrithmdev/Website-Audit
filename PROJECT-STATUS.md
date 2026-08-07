@@ -22,7 +22,7 @@
 | AI Analysis                  | ⚠️ Stub          | Schema and prompt defined, depends on Supabase + OpenAI env setup         |
 | PDF Generation               | ⚠️ Stub          | Component path declared, needs PDF document component to be built         |
 | Database (Supabase)          | ⚠️ Not connected | Schema not in repo, no migrations, env vars not configured                |
-| Error Handling (SSR)         | ✅ Complete      | Custom error pages, error capture middleware, Lovable telemetry           |
+| Error Handling (SSR)         | ✅ Complete      | Custom error pages, error capture middleware, React error boundary  |
 | Type Safety                  | ✅ Passing       | `tsc --noEmit` passes with zero errors                                    |
 
 ---

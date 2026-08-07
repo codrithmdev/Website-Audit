@@ -2,8 +2,6 @@
 
 > AI-powered visual, trust, and UX audits that turn bounce rates into booked revenue in under 60 seconds.
 
-Built with [Lovable](https://lovable.dev)
-
 ---
 
 ## What It Does
@@ -32,7 +30,7 @@ GrowthLens takes a website URL and produces a prioritized, business-first action
 | AI                 | Vercel AI SDK + OpenAI gpt-4o-mini                   |
 | Database           | Supabase (PostgreSQL)                                |
 | PDF Generation     | @react-pdf/renderer                                  |
-| Package Manager    | Bun (with supply-chain guard)                        |
+| Package Manager    | npm                                                  |
 
 ## Project Structure
 
@@ -44,7 +42,6 @@ src/
 │   ├── utils.ts            # cn() utility (clsx + tailwind-merge)
 │   ├── error-page.ts       # Static HTML error page renderer
 │   ├── error-capture.ts    # Server-side error capture
-│   ├── lovable-error-reporting.ts
 │   └── scraper/
 │       ├── browser.ts      # Playwright + Browserless.io page scraper
 │       └── lighthouse.ts   # Lighthouse audit runner
@@ -66,7 +63,7 @@ src/
 ### Prerequisites
 
 - Node.js 18+ (recommended: install with [nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
-- npm or Bun
+- npm
 
 ### Installation
 
@@ -134,4 +131,3 @@ The app uses a single-page state machine with four views:
 - [Trigger.dev](https://trigger.dev)
 - [Supabase](https://supabase.com)
 - [Vercel AI SDK](https://sdk.vercel.ai)
-- [Lovable](https://lovable.dev)
