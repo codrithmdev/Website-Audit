@@ -38,13 +38,14 @@ Legend:
 - `[x]` **Credit Transactions Ledger (`credit_transactions`)**: Audit trail for purchases, grants, and deductions.
 - `[x]` **Row-Level Security (RLS) Policies**: Data isolation across all tables.
 - `[x]` **Stored Procedures**:
-  - `handle_new_user()` (Auto-grants 1 free credit on signup).
-  - `deduct_user_credit()` (Atomic deduction on audit run).
-  - `increment_user_credits()` (Atomic credit top-up on Stripe event).
-- `[ ]` **Storage Buckets Setup**:
-  - `[ ]` Create public bucket `audit-assets` (for screenshots).
-  - `[ ]` Create public bucket `audit-reports` (for downloadable PDFs).
-  - `[ ]` Configure storage security policies for authenticated user access.
+  - `[x]` `handle_new_user()` (Auto-grants 1 free credit on signup).
+  - `[x]` `deduct_user_credit()` (Atomic deduction on audit run).
+  - `[x]` `increment_user_credits()` (Atomic credit top-up on Stripe event).
+- `[x]` **Storage Buckets Setup** (in `supabase/migrations/0001_init.sql`):
+  - `[x]` Create public bucket `audit-assets` (for screenshots).
+  - `[x]` Create public bucket `audit-reports` (for downloadable PDFs).
+  - `[x]` Configure storage security policies for authenticated user access.
+  - `[ ]` Run migration against a real Supabase project (requires credentials).
 
 ---
 
@@ -107,11 +108,11 @@ Legend:
 
 ### 6. PDF Engine (Pending Implementation)
 
-- `[ ]` **React-PDF Template (`src/components/pdf/AuditPDFDocument.tsx`)**:
-  - `[ ]` "Executive Growth" design system layout (Navy/Emerald/Amber).
-  - `[ ]` Executive Summary & Score Overview section.
+- `[x]` **React-PDF Template (`src/components/pdf/AuditPDFDocument.tsx`)**:
+  - `[x]` "Executive Growth" design system layout (Navy/Emerald/Amber).
+  - `[x]` Executive Summary & Score Overview section.
   - `[ ]` Visual screenshot highlight section.
-  - `[ ]` Prioritized Action Items table.
+  - `[x]` Prioritized Action Items table.
 - `[ ]` **PDF Generation Buffer Testing**:
   - `[ ]` Verify serverless memory footprint when compiling large PDFs.
 

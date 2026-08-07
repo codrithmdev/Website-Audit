@@ -28,6 +28,13 @@ import { toast } from "sonner";
 import auditTarget from "@/assets/audit-target.jpg";
 import { Button } from "@/components/ui/button";
 import {
+  startAudit as startAuditFn,
+  getAuditStatus,
+  getMyAudits,
+  getProfile,
+} from "@/lib/services/audit-service";
+import type { AuditResult } from "@/lib/schemas/audit";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -120,7 +127,36 @@ function GrowthLensApp() {
     [progress, setProgress] = useState(0),
     [upgrade, setUpgrade] = useState(false),
     [loggedIn, setLoggedIn] = useState(false),
-    [menu, setMenu] = useState(false);
+    [menu, setMenu] = useState(false),
+    [credits, setCredits] = useState(8),
+    [auditResult, setAuditResult] = useState<{
+      id: string;
+      status: string;
+      score: number | null;
+      report: AuditResult | null;
+      screenshotUrl: string | null;
+      pdfUrl: string | null;
+    } | null>(null),
+    [myAudits, setMyAudits] = useState<
+      Array<{
+        id: string;
+        target_url: string;
+        status: string;
+        overall_score: number | null;
+        created_at: string;
+        pdf_report_url: string | null;
+      }>
+    >([]);
+  useEffect(() => {
+    if (loggedIn) {
+      getMyAudits({ data: undefined })
+        .then((r) => setMyAudits(r.audits))
+        .catch(() => {});
+      getProfile({ data: undefined })
+        .then((r) => setCredits(r.credits))
+        .catch(() => {});
+    }
+  }, [loggedIn]);
   useEffect(() => {
     if (view !== "processing") return;
     setProgress(4);
@@ -138,13 +174,45 @@ function GrowthLensApp() {
     );
     return () => window.clearInterval(id);
   }, [view]);
-  const startAudit = () => {
+
+  const startAudit = async () => {
     if (!url.trim()) {
       toast.error("Enter a website URL to continue");
       return;
     }
     setView("processing");
     window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      const { auditId } = await startAuditFn({ data: { targetUrl: url } });
+      // Poll real audit status until the audit completes.
+      const started = async () => {
+        const res = await getAuditStatus({ data: auditId });
+        if (res.status === "completed" || res.status === "failed") {
+          setAuditResult({
+            id: auditId,
+            status: res.status,
+            score: res.score ?? null,
+            report: res.report ?? null,
+            screenshotUrl: res.screenshotUrl ?? null,
+            pdfUrl: res.pdfUrl ?? null,
+          });
+          setView("report");
+          return;
+        }
+        window.setTimeout(started, 2000);
+      };
+      started();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Something went wrong starting the audit.";
+      if (msg === "INSUFFICIENT_CREDITS") {
+        setUpgrade(true);
+        setView("landing");
+        toast.error("You're out of audit credits.");
+      } else {
+        setView("landing");
+        toast.error(msg);
+      }
+    }
   };
   if (view === "processing")
     return <Processing url={url} progress={progress} onCancel={() => setView("landing")} />;
@@ -155,6 +223,7 @@ function GrowthLensApp() {
         onDashboard={() => setView("dashboard")}
         onReaudit={startAudit}
         onUpgrade={() => setUpgrade(true)}
+        result={auditResult}
       />
     );
   if (view === "dashboard")
@@ -163,6 +232,8 @@ function GrowthLensApp() {
         onReport={() => setView("report")}
         onNew={() => setView("landing")}
         onUpgrade={() => setUpgrade(true)}
+        audits={myAudits}
+        credits={credits}
       />
     );
   return (
@@ -187,7 +258,7 @@ function GrowthLensApp() {
           <div className="hidden min-w-0 items-center justify-end gap-2 md:flex">
             {loggedIn ? (
               <>
-                <span className="credit-pill hidden xl:inline-flex">⚡ 8 Credits Left</span>
+                <span className="credit-pill hidden xl:inline-flex">⚡ {credits} Credits Left</span>
                 <Button variant="ghost" onClick={() => setView("dashboard")}>
                   Dashboard
                 </Button>
@@ -584,13 +655,25 @@ function Report({
   onDashboard,
   onReaudit,
   onUpgrade,
+  result,
 }: {
   url: string;
   onDashboard: () => void;
   onReaudit: () => void;
   onUpgrade: () => void;
+  result: {
+    id: string;
+    status: string;
+    score: number | null;
+    report: AuditResult | null;
+    screenshotUrl: string | null;
+    pdfUrl: string | null;
+  } | null;
 }) {
   const domain = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const liveScore = result?.score ?? 72;
+  const liveReport = result?.report;
+  const screenshotSrc = result?.screenshotUrl ?? auditTarget;
   const copy = () => {
     navigator.clipboard?.writeText(location.href);
     toast.success("Report URL copied to clipboard!");
@@ -612,7 +695,7 @@ function Report({
         <div className="report-banner">
           <div className="flex min-w-0 items-center gap-4">
             <img
-              src={auditTarget}
+              src={screenshotSrc}
               alt={`Audited homepage for ${domain}`}
               width={160}
               height={100}
@@ -626,10 +709,19 @@ function Report({
               </p>
             </div>
           </div>
-          <Score value={72} />
+          <Score value={liveScore} />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => toast.success("PDF report download started")}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (result?.pdfUrl) {
+                window.open(result.pdfUrl, "_blank");
+              } else {
+                toast.success("PDF report download started");
+              }
+            }}
+          >
             <Download />
             Download PDF
           </Button>
@@ -653,18 +745,26 @@ function Report({
           <div className="mt-6 grid gap-5 md:grid-cols-3">
             <Summary
               label="Trust"
-              text="Professional appearance, but proof arrives too late in the journey."
-              status="Needs work"
+              text={
+                liveReport?.trustSignalSummary ??
+                "Professional appearance, but proof arrives too late in the journey."
+              }
+              status={liveReport ? `${liveReport.trustScore}/100` : "Needs work"}
             />
             <Summary
               label="Message clarity"
-              text="The offer is clear, but the outcome and differentiation are not."
-              status="Fair"
+              text={
+                liveReport?.valuePropClarity ??
+                "The offer is clear, but the outcome and differentiation are not."
+              }
+              status={liveReport ? `${liveReport.clarityScore}/100` : "Fair"}
             />
             <Summary
               label="Conversion friction"
-              text="Too many competing paths weaken your primary action."
-              status="High friction"
+              text={
+                liveReport?.heroCritique ?? "Too many competing paths weaken your primary action."
+              }
+              status={liveReport ? `${liveReport.frictionScore}/100` : "High friction"}
             />
           </div>
         </section>
@@ -674,10 +774,12 @@ function Report({
               <span className="eyebrow">Priority action plan</span>
               <h2>Fix first</h2>
             </div>
-            <span className="metric text-sm text-muted-foreground">3 critical findings</span>
+            <span className="metric text-sm text-muted-foreground">
+              {liveReport?.fixFirst?.length ?? 3} priority findings
+            </span>
           </div>
           <div className="mt-6 space-y-4">
-            {findings.map((f, i) => (
+            {(liveReport?.fixFirst ?? findings).map((f, i) => (
               <article className="finding-card" key={f.title}>
                 <div className="priority-no">0{i + 1}</div>
                 <div className="min-w-0 flex-1">
@@ -706,7 +808,7 @@ function Report({
           <div className="mt-6 grid overflow-hidden rounded-lg border bg-card lg:grid-cols-[1fr_320px]">
             <div className="relative bg-primary p-4">
               <img
-                src={auditTarget}
+                src={screenshotSrc}
                 alt="Annotated audit evidence"
                 width={1280}
                 height={800}
@@ -852,21 +954,52 @@ function Dashboard({
   onReport,
   onNew,
   onUpgrade,
+  audits,
+  credits,
 }: {
   onReport: () => void;
   onNew: () => void;
   onUpgrade: () => void;
+  audits: Array<{
+    id: string;
+    target_url: string;
+    status: string;
+    overall_score: number | null;
+    created_at: string;
+    pdf_report_url: string | null;
+  }>;
+  credits: number;
 }) {
   const [q, setQ] = useState("");
-  const rows = useMemo(
-    () =>
-      [
-        { url: "northstar.io", date: "Aug 6, 2026", score: 72, p: 3 },
-        { url: "brightpath.co", date: "Aug 2, 2026", score: 84, p: 2 },
-        { url: "acme-studio.com", date: "Jul 29, 2026", score: 61, p: 5 },
-      ].filter((r) => r.url.includes(q.toLowerCase())),
-    [q],
-  );
+  const rows = useMemo(() => {
+    if (audits.length > 0) {
+      return audits.map((a) => ({
+        id: a.id,
+        url: a.target_url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+        date: new Date(a.created_at).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+        score: a.overall_score ?? 0,
+        status: a.status,
+        p: a.status === "completed" ? 3 : 0,
+      }));
+    }
+    return [
+      { id: "1", url: "northstar.io", date: "Aug 6, 2026", score: 72, status: "completed", p: 3 },
+      { id: "2", url: "brightpath.co", date: "Aug 2, 2026", score: 84, status: "completed", p: 2 },
+      {
+        id: "3",
+        url: "acme-studio.com",
+        date: "Jul 29, 2026",
+        score: 61,
+        status: "completed",
+        p: 5,
+      },
+    ];
+  }, [audits]);
+  const filtered = rows.filter((r) => r.url.includes(q.toLowerCase()));
   return (
     <div className="min-h-screen bg-canvas">
       <header className="border-b bg-background">
@@ -884,13 +1017,21 @@ function Dashboard({
             <h1 className="mt-1 text-3xl font-bold">Good afternoon, Alex.</h1>
           </div>
           <Button variant="outline" onClick={onUpgrade}>
-            ⚡ 8 credits left
+            ⚡ {credits} credits left
           </Button>
         </div>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat icon={FileText} label="Total audits" value="24" />
-          <Stat icon={Gauge} label="Average score" value="74.6" />
-          <Stat icon={Sparkles} label="Credits saved" value="8" />
+          <Stat icon={FileText} label="Total audits" value={String(rows.length)} />
+          <Stat
+            icon={Gauge}
+            label="Average score"
+            value={
+              rows.length
+                ? String(Math.round(rows.reduce((s, r) => s + r.score, 0) / rows.length))
+                : "0"
+            }
+          />
+          <Stat icon={Sparkles} label="Credits left" value={String(credits)} />
           <Stat icon={Users} label="Current plan" value="Starter" />
         </div>
         <section className="mt-10 rounded-lg border bg-card">
@@ -921,18 +1062,20 @@ function Dashboard({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.url} className="border-b last:border-0">
+                {filtered.map((r) => (
+                  <tr key={r.id} className="border-b last:border-0">
                     <td className="p-4 font-semibold">
                       <Globe2 className="mr-2 inline text-growth" size={16} />
                       {r.url}
                     </td>
                     <td className="metric text-xs">{r.date}</td>
                     <td>
-                      <span className="metric score-chip">{r.score}</span>
+                      <span className="metric score-chip">
+                        {r.status === "completed" ? r.score : "—"}
+                      </span>
                     </td>
                     <td>
-                      <span className="badge-warning">{r.p} fix first</span>
+                      <span className="badge-warning">{r.status}</span>
                     </td>
                     <td>
                       <div className="flex justify-end gap-1 pr-4">

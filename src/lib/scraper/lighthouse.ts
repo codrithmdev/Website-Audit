@@ -29,9 +29,9 @@ export async function runLighthouseAudit(targetUrl: string): Promise<LighthouseM
     }
 
     return {
-      performanceScore: Math.round((lhr.categories.performance?.score || 0) * 100),
-      accessibilityScore: Math.round((lhr.categories.accessibility?.score || 0) * 100),
-      seoScore: Math.round((lhr.categories.seo?.score || 0) * 100),
+      performanceScore: Math.round((lhr.categories["performance"]?.score || 0) * 100),
+      accessibilityScore: Math.round((lhr.categories["accessibility"]?.score || 0) * 100),
+      seoScore: Math.round((lhr.categories["seo"]?.score || 0) * 100),
       largestContentfulPaint: lhr.audits["largest-contentful-paint"]?.displayValue || "N/A",
       cumulativeLayoutShift: lhr.audits["cumulative-layout-shift"]?.displayValue || "N/A",
     };

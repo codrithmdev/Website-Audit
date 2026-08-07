@@ -1,6 +1,5 @@
 import React from "react";
 import { task } from "@trigger.dev/sdk/v3";
-import { createClient } from "@supabase/supabase-js";
 import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { auditResultSchema } from "@/lib/schemas/audit";
@@ -9,15 +8,7 @@ import { AuditPDFDocument } from "@/components/pdf/AuditPDFDocument";
 import crypto from "crypto";
 import { capturePageData } from "@/lib/scraper/browser";
 import { runLighthouseAudit } from "@/lib/scraper/lighthouse";
-
-function getSupabaseAdmin() {
-  const SUPABASE_URL = process.env["SUPABASE_URL"] ?? process.env["NEXT_PUBLIC_SUPABASE_URL"];
-  const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"];
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-}
+import { getSupabaseAdmin } from "@/lib/supabase/client";
 
 export const runGrowthAudit = task({
   id: "run-growth-audit",
@@ -52,10 +43,9 @@ export const runGrowthAudit = task({
         .upload(screenshotPath, screenshotDataToUpload, { contentType: "image/png", upsert: true });
       if (uploadError) throw uploadError;
 
-      const { data: screenshotData, error: publicUrlError } = supabaseAdmin.storage
+      const { data: screenshotData } = supabaseAdmin.storage
         .from("audit-assets")
         .getPublicUrl(screenshotPath);
-      if (publicUrlError) throw publicUrlError;
       const screenshotPublicUrl = screenshotData.publicUrl;
 
       // ----------------------------------------------------------------------
@@ -104,7 +94,10 @@ export const runGrowthAudit = task({
       // ----------------------------------------------------------------------
       // Generate PDF using react-pdf without JSX (keeps file as .ts)
       const pdfDoc = pdf(
-        React.createElement(AuditPDFDocument, { auditData: finalAuditPayload, targetUrl }),
+        React.createElement(AuditPDFDocument, {
+          auditData: finalAuditPayload,
+          targetUrl,
+        }) as React.ReactElement<import("@react-pdf/renderer").DocumentProps>,
       );
       const pdfBuffer = await pdfDoc.toBuffer();
 
@@ -114,10 +107,7 @@ export const runGrowthAudit = task({
         .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
       if (pdfUploadError) throw pdfUploadError;
 
-      const { data: pdfData, error: pdfUrlError } = supabaseAdmin.storage
-        .from("audit-reports")
-        .getPublicUrl(pdfPath);
-      if (pdfUrlError) throw pdfUrlError;
+      const { data: pdfData } = supabaseAdmin.storage.from("audit-reports").getPublicUrl(pdfPath);
       const pdfPublicUrl = pdfData.publicUrl;
 
       // ----------------------------------------------------------------------
@@ -164,13 +154,15 @@ export const runGrowthAudit = task({
       if (cacheError) throw cacheError;
 
       return { success: true, auditId };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Mark job as failed cleanly
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred during execution.";
       await supabaseAdmin
         .from("audits")
         .update({
           status: "failed",
-          error_message: err.message || "An unexpected error occurred during execution.",
+          error_message: message,
         })
         .eq("id", auditId);
 

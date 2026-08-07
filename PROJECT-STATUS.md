@@ -9,21 +9,22 @@
 
 | Area                         | Status           | Notes                                                                     |
 | ---------------------------- | ---------------- | ------------------------------------------------------------------------- |
-| Frontend UI                  | ✅ Complete      | Landing, Processing, Report, Dashboard views with 46 shadcn/ui components |
+| Frontend UI                  | ✅ Complete      | Landing, Processing, Report, Dashboard views wired to server functions   |
 | Design System                | ✅ Complete      | Tailwind v4 with 30+ custom utilities, light/dark themes, responsive      |
 | Landing Page                 | ✅ Complete      | Hero, features, sample report preview, pricing section, mobile nav        |
-| Processing View              | ✅ Complete      | Step-by-step progress animation, skeleton loading states                  |
+| Processing View              | ✅ Complete      | Step-by-step progress animation, polls real audit status                  |
 | Report View                  | ✅ Complete      | Executive summary, score ring, tabbed findings, evidence annotations      |
-| Dashboard View               | ✅ Complete      | Stats overview, audit history table, search                               |
+| Dashboard View               | ✅ Complete      | Stats overview, audit history from Supabase (demo fallback), search       |
 | Pricing & Upgrade            | ✅ Complete      | 3 tiers (Free, Starter, Agency), upgrade modal with one-time pack option  |
-| Audit Pipeline (Trigger.dev) | ⚠️ Stub          | Task structure defined but not wired to live data yet                     |
+| Audit Pipeline (Trigger.dev) | ✅ Implemented   | Full 6-step pipeline wired (scrape → storage → AI → score → PDF → DB)     |
 | Page Scraper (Playwright)    | ✅ Implemented   | Browserless.io integration, cookie banner dismissal, metadata extraction  |
 | Lighthouse Audit             | ✅ Implemented   | Performance/a11y/SEO scores with graceful fallback                        |
-| AI Analysis                  | ⚠️ Stub          | Schema and prompt defined, depends on Supabase + OpenAI env setup         |
-| PDF Generation               | ⚠️ Stub          | Component path declared, needs PDF document component to be built         |
-| Database (Supabase)          | ⚠️ Not connected | Schema not in repo, no migrations, env vars not configured                |
-| Error Handling (SSR)         | ✅ Complete      | Custom error pages, error capture middleware, React error boundary  |
-| Type Safety                  | ✅ Passing       | `tsc --noEmit` passes with zero errors                                    |
+| AI Analysis                  | ✅ Implemented   | `ai` + `@ai-sdk/openai` installed, `generateObject` wired into pipeline   |
+| PDF Generation               | ✅ Built         | `AuditPDFDocument` component + `audit` schema, wired into pipeline         |
+| Database (Supabase)          | ✅ Migration written | `supabase/migrations/0001_init.sql` (5 tables, RLS, 3 RPCs, 2 buckets)  |
+| Server Functions             | ✅ Implemented   | `startAudit`/`getAuditStatus`/`getMyAudits`/`getProfile` (demo fallback)   |
+| Error Handling (SSR)         | ✅ Complete      | Custom error pages, error capture middleware, React error boundary         |
+| Type Safety                  | ✅ Passing      | `tsc --noEmit` passes with zero errors                                    |
 
 ---
 
@@ -58,23 +59,22 @@
 
 ## What's Missing for Production
 
-1. **Supabase schema & migrations** — `audits`, `domain_cache` tables, storage buckets, `deduct_user_credit` RPC function
-2. **Live API integration** — Connect frontend to Trigger.dev tasks for real audits
-3. **PDF document component** — Build `AuditPDFDocument` for @react-pdf/renderer
-4. **Authentication** — User accounts, session management (currently simulated)
-5. **Credit system** — Real credit tracking and deduction via Supabase RPC
-6. **Domain caching** — 14-day cache logic not yet enforced at query level
-7. **Rate limiting** — Per-IP audit limits (10/hour target per PRD)
-8. **Environment setup** — `.env.local` with BROWSERLESS_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY
+1. **Run Supabase migration** — apply `supabase/migrations/0001_init.sql` against a real project
+2. **Configure `.env.local`** — SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, BROWSERLESS_API_KEY, OPENAI_API_KEY
+3. **Real auth wiring** — Supabase Auth UI (Google SSO + Magic Link) and session persistence
+4. **Live audit execution** — run `npx trigger.dev@latest dev` + trigger a real `run-growth-audit`
+5. **Domain caching enforcement** — cache lookup in `startAudit`, RLS on new rows
+6. **Rate limiting** — Per-IP audit limits (10/hour target per PRD)
+7. **Frontend PDF/screenshot** — wire `screenshot_url`/`pdf_report_url` display (needs real runs)
 
 ---
 
 ## Next Steps
 
 - [ ] Set up Supabase project and run database migrations
-- [ ] Build `AuditPDFDocument` component for PDF generation
-- [ ] Wire frontend views to live Trigger.dev audit pipeline
+- [x] Build `AuditPDFDocument` component for PDF generation
+- [x] Install & wire pipeline deps (Supabase, AI, Playwright, Lighthouse)
+- [x] Wire frontend views to live audit server functions (demo fallback)
 - [ ] Implement authentication (Supabase Auth or similar)
-- [ ] Add real credit tracking and domain caching logic
-- [ ] Deploy and test end-to-end audit flow
+- [ ] Run end-to-end audit with real Trigger.dev + API keys
 - [ ] Set up CI/CD pipeline
