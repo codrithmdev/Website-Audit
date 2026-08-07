@@ -10,56 +10,13 @@ import crypto from "crypto";
 import { capturePageData } from "@/lib/scraper/browser";
 import { runLighthouseAudit } from "@/lib/scraper/lighthouse";
 
-// Inside the Trigger.dev task run method:
-const [browserData, lighthouseData] = await Promise.all([
-  capturePageData(targetUrl),
-  runLighthouseAudit(targetUrl),
-]);
-
-// Server-side admin client bypassing RLS
-const SUPABASE_URL = process.env['SUPABASE_URL'] ?? process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
-}
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-// Lightweight helper to capture page data when a headless browser is not available.
-// This is intentionally simple: it fetches the HTML, extracts title/meta description
-// and returns a tiny 1x1 PNG as the screenshot buffer so uploads/tests can proceed.
-async function capturePageData(targetUrl: string) {
-  try {
-    const resp = await fetch(targetUrl, { method: "GET" });
-    const text = await resp.text();
-    const titleMatch = text.match(/<title>([^<]*)<\/title>/i);
-    const metaMatch = text.match(/<meta\s+name=["']description["']\s+content=["']([^"']*)["']/i) ||
-      text.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']*)["']/i);
-
-    const title = titleMatch ? titleMatch[1] : "";
-    const description = metaMatch ? metaMatch[1] : "";
-
-    // 1x1 transparent PNG (base64)
-    const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
-    const imageBuffer = Buffer.from(tinyPngBase64, "base64");
-
-    return { imageBuffer, title, description, html: text };
-  } catch (err) {
-    return { imageBuffer: Buffer.from("") , title: "", description: "", html: "" };
+function getSupabaseAdmin() {
+  const SUPABASE_URL = process.env["SUPABASE_URL"] ?? process.env["NEXT_PUBLIC_SUPABASE_URL"];
+  const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"];
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
   }
-}
-
-// Lightweight lighthouse-like audit stub. Computes a simple performanceScore from HTML size.
-async function runLighthouseAudit(targetUrl: string) {
-  try {
-    const resp = await fetch(targetUrl, { method: "GET" });
-    const text = await resp.text();
-    // heuristic: shorter pages -> higher score
-    const sizeKb = Math.max(0, text.length / 1024);
-    const performanceScore = Math.max(1, Math.round(Math.max(0, 100 - sizeKb)));
-    return { performanceScore };
-  } catch (err) {
-    return { performanceScore: 50 };
-  }
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
 export const runGrowthAudit = task({
@@ -67,12 +24,10 @@ export const runGrowthAudit = task({
   retry: { maxAttempts: 2 },
   run: async (payload: { auditId: string; userId: string; targetUrl: string }) => {
     const { auditId, userId, targetUrl } = payload;
-    
+
     // Step 0: Mark audit status as processing
-    await supabaseAdmin
-      .from("audits")
-      .update({ status: "processing" })
-      .eq("id", auditId);
+    const supabaseAdmin = getSupabaseAdmin();
+    await supabaseAdmin.from("audits").update({ status: "processing" }).eq("id", auditId);
 
     try {
       // ----------------------------------------------------------------------
@@ -86,9 +41,11 @@ export const runGrowthAudit = task({
       // Upload capture screenshot to Supabase Storage
       const screenshotPath = `screenshots/${auditId}.png`;
       // Upload capture screenshot to Supabase Storage (convert Buffer -> Blob where appropriate)
-      const screenshotDataToUpload = (typeof browserData.imageBuffer === "object" && (browserData.imageBuffer instanceof Buffer || ArrayBuffer.isView(browserData.imageBuffer)))
-        ? new Blob([browserData.imageBuffer])
-        : browserData.imageBuffer;
+      const screenshotDataToUpload =
+        typeof browserData.imageBuffer === "object" &&
+        (browserData.imageBuffer instanceof Buffer || ArrayBuffer.isView(browserData.imageBuffer))
+          ? new Blob([new Uint8Array(browserData.imageBuffer)])
+          : browserData.imageBuffer;
 
       const { error: uploadError } = await supabaseAdmin.storage
         .from("audit-assets")
@@ -115,7 +72,10 @@ export const runGrowthAudit = task({
           {
             role: "user",
             content: [
-              { type: "text", text: `Analyze landing page for domain: ${targetUrl}. Page Title: "${browserData.title}". Meta Description: "${browserData.description}".` },
+              {
+                type: "text",
+                text: `Analyze landing page for domain: ${targetUrl}. Page Title: "${browserData.title}". Meta Description: "${browserData.description}".`,
+              },
               { type: "image", image: browserData.imageBuffer },
             ],
           },
@@ -127,10 +87,10 @@ export const runGrowthAudit = task({
       // Weights: Trust (30%), Friction (30%), CTA (20%), Tech/SEO (20%)
       // ----------------------------------------------------------------------
       const overallScore = Math.round(
-        aiAnalysis.trustScore * 0.30 +
-        aiAnalysis.frictionScore * 0.30 +
-        aiAnalysis.ctaScore * 0.20 +
-        lighthouseData.performanceScore * 0.20
+        aiAnalysis.trustScore * 0.3 +
+          aiAnalysis.frictionScore * 0.3 +
+          aiAnalysis.ctaScore * 0.2 +
+          lighthouseData.performanceScore * 0.2,
       );
 
       const finalAuditPayload = {
@@ -143,7 +103,9 @@ export const runGrowthAudit = task({
       // STEP 4: Programmatic PDF Compilation & Storage
       // ----------------------------------------------------------------------
       // Generate PDF using react-pdf without JSX (keeps file as .ts)
-      const pdfDoc = pdf(React.createElement(AuditPDFDocument, { auditData: finalAuditPayload, targetUrl }));
+      const pdfDoc = pdf(
+        React.createElement(AuditPDFDocument, { auditData: finalAuditPayload, targetUrl }),
+      );
       const pdfBuffer = await pdfDoc.toBuffer();
 
       const pdfPath = `reports/${auditId}.pdf`;
@@ -161,22 +123,28 @@ export const runGrowthAudit = task({
       // ----------------------------------------------------------------------
       // STEP 5: Database Commit, Credit Deduction & Domain Cache
       // ----------------------------------------------------------------------
-      const urlHash = crypto.createHash("sha256").update(targetUrl.toLowerCase().trim()).digest("hex");
+      const urlHash = crypto
+        .createHash("sha256")
+        .update(targetUrl.toLowerCase().trim())
+        .digest("hex");
       const domain = new URL(targetUrl).hostname;
 
       // Update Audit Record
-      const { error: auditUpdateError } = await supabaseAdmin.from("audits").update({
-        status: "completed",
-        overall_score: overallScore,
-        trust_score: aiAnalysis.trustScore,
-        friction_score: aiAnalysis.frictionScore,
-        cta_score: aiAnalysis.ctaScore,
-        clarity_score: aiAnalysis.clarityScore,
-        report_json: finalAuditPayload,
-        screenshot_url: screenshotPublicUrl,
-        pdf_report_url: pdfPublicUrl,
-        completed_at: new Date().toISOString(),
-      }).eq("id", auditId);
+      const { error: auditUpdateError } = await supabaseAdmin
+        .from("audits")
+        .update({
+          status: "completed",
+          overall_score: overallScore,
+          trust_score: aiAnalysis.trustScore,
+          friction_score: aiAnalysis.frictionScore,
+          cta_score: aiAnalysis.ctaScore,
+          clarity_score: aiAnalysis.clarityScore,
+          report_json: finalAuditPayload,
+          screenshot_url: screenshotPublicUrl,
+          pdf_report_url: pdfPublicUrl,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", auditId);
       if (auditUpdateError) throw auditUpdateError;
 
       // Deduct Credit
@@ -198,10 +166,13 @@ export const runGrowthAudit = task({
       return { success: true, auditId };
     } catch (err: any) {
       // Mark job as failed cleanly
-      await supabaseAdmin.from("audits").update({
-        status: "failed",
-        error_message: err.message || "An unexpected error occurred during execution.",
-      }).eq("id", auditId);
+      await supabaseAdmin
+        .from("audits")
+        .update({
+          status: "failed",
+          error_message: err.message || "An unexpected error occurred during execution.",
+        })
+        .eq("id", auditId);
 
       throw err;
     }

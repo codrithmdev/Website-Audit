@@ -153,51 +153,362 @@
     font-family: var(--font-sans);
     letter-spacing: 0;
   }
-  button, a { cursor: pointer; }
+  button,
+  a {
+    cursor: pointer;
+  }
 }
 
-@utility section-shell { width: 100%; max-width: 80rem; margin-inline: auto; padding-inline: 1.25rem; }
-@utility metric { font-family: var(--font-mono); letter-spacing: 0; }
-@utility nav-link { font-size: .8125rem; font-weight: 600; color: var(--muted-foreground); transition: color .2s; &:hover { color: var(--foreground); } }
-@utility eyebrow { display: flex; width: fit-content; align-items: center; gap: .4rem; color: var(--growth); font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-@utility hero-grid { background-color: var(--background); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 52px 52px; background-position: center; }
-@utility audit-bar { display: flex; flex-wrap: wrap; overflow: hidden; border: 1px solid var(--border); border-radius: .65rem; background: var(--background); box-shadow: 0 18px 50px color-mix(in oklab, var(--foreground) 10%, transparent); }
-@utility report-preview { border: 1px solid var(--border); border-radius: .5rem; background: var(--card); box-shadow: 0 20px 55px color-mix(in oklab, var(--foreground) 10%, transparent); }
-@utility pin { position: absolute; display: grid; width: 2rem; height: 2rem; place-items: center; border: 3px solid var(--background); border-radius: 999px; background: var(--warning); color: var(--foreground); font: 700 .75rem var(--font-mono); box-shadow: 0 0 0 6px color-mix(in oklab, var(--warning) 25%, transparent); }
-@utility pin-static { display: grid; width: 1.75rem; height: 1.75rem; place-items: center; border-radius: 999px; background: var(--warning); font: 700 .7rem var(--font-mono); }
-@utility score-sm { display: grid; width: 2.7rem; height: 2.7rem; place-items: center; border: 4px solid var(--warning); border-radius: 999px; font: 700 .8rem var(--font-mono); }
-@utility section-heading { text-align: center; & .eyebrow { margin-inline: auto; } & h2 { margin-top: 1rem; font-size: clamp(1.85rem, 4vw, 2.75rem); font-weight: 800; } & p { margin: .8rem auto 0; max-width: 38rem; color: var(--muted-foreground); } }
-@utility feature-card { border: 1px solid var(--border); border-radius: .5rem; background: var(--card); padding: 1.75rem; box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 7%, transparent); }
-@utility icon-box { display: grid; width: 2.6rem; height: 2.6rem; place-items: center; border-radius: .4rem; background: color-mix(in oklab, var(--growth) 12%, var(--background)); color: var(--growth); & svg { width: 1.25rem; } }
-@utility toggle { border-radius: .3rem; padding: .5rem .8rem; color: var(--muted-foreground); }
-@utility toggle-active { border-radius: .3rem; padding: .5rem .8rem; background: var(--primary); color: var(--primary-foreground); }
-@utility price-card { position: relative; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); padding: 2rem; }
-@utility price-hot { border-color: var(--growth); box-shadow: 0 8px 30px color-mix(in oklab, var(--growth) 12%, transparent); }
-@utility popular { display: inline-flex; width: fit-content; border-radius: 999px; background: var(--growth); color: var(--growth-foreground); padding: .25rem .55rem; font-size: .65rem; font-weight: 800; text-transform: uppercase; }
-@utility credit-pill { align-items: center; border: 1px solid color-mix(in oklab, var(--warning) 35%, var(--border)); border-radius: 999px; background: color-mix(in oklab, var(--warning) 10%, var(--background)); padding: .35rem .65rem; font: 600 .7rem var(--font-mono); }
-@utility pulse-dot { width: .45rem; height: .45rem; border-radius: 999px; background: var(--growth); animation: pulse 1.4s infinite; }
-@utility process-row { display: flex; align-items: center; gap: .8rem; border: 1px solid var(--border); border-radius: .4rem; padding: .8rem; & svg { width: 1.2rem; } }
-@utility process-active { border-color: color-mix(in oklab, var(--growth) 55%, var(--border)); background: color-mix(in oklab, var(--growth) 5%, var(--background)); }
-@utility skeleton-preview { display: grid; gap: 1rem; opacity: .8; }
-@utility skeleton-line { height: 1rem; border-radius: .25rem; background: var(--muted); animation: shimmer 1.8s infinite; }
-@utility skeleton-block { height: 8rem; border-radius: .25rem; background: var(--muted); animation: shimmer 1.8s infinite; }
-@utility skeleton-card { height: 4rem; border-radius: .25rem; background: var(--muted); animation: shimmer 1.8s infinite; }
-@utility report-banner { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); padding: 1.25rem; }
-@utility score-ring { display: grid; width: 5.5rem; height: 5.5rem; place-items: center; flex-shrink: 0; border-radius: 999px; background: conic-gradient(var(--warning) var(--score), var(--muted) 0); & > div { display: grid; width: 4.4rem; height: 4.4rem; place-items: center; align-content: center; border-radius: inherit; background: var(--card); } }
-@utility summary-box { border-left: 4px solid var(--growth); border-radius: .3rem; background: var(--card); padding: 1.5rem; box-shadow: 0 1px 4px color-mix(in oklab, var(--foreground) 8%, transparent); }
-@utility section-title { display: flex; align-items: end; justify-content: space-between; gap: 1rem; & h2 { margin-top: .5rem; font-size: 1.75rem; font-weight: 800; } }
-@utility finding-card { display: flex; gap: 1.25rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); padding: 1.4rem; }
-@utility priority-no { font: 700 1.15rem var(--font-mono); color: var(--warning); }
-@utility badge-warning { display: inline-flex; width: fit-content; border-radius: 999px; background: color-mix(in oklab, var(--warning) 15%, var(--background)); color: color-mix(in oklab, var(--warning) 70%, var(--foreground)); padding: .25rem .5rem; font-size: .65rem; font-weight: 800; }
-@utility badge-neutral { display: inline-flex; width: fit-content; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); padding: .25rem .5rem; font-size: .65rem; font-weight: 700; }
-@utility detail-good { border-left: 2px solid var(--growth); padding-left: 1rem; }
-@utility stat-card { display: flex; align-items: center; gap: 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); padding: 1.25rem; }
-@utility score-chip { display: inline-grid; width: 2.2rem; height: 2.2rem; place-items: center; border-radius: 999px; background: color-mix(in oklab, var(--growth) 14%, var(--background)); color: var(--growth); font-weight: 700; }
-@utility upgrade-option { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); padding: 1.25rem; text-align: left; }
-@utility upgrade-best { border-color: var(--growth); }
+@utility section-shell {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+@utility metric {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+@utility nav-link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  transition: color 0.2s;
+  &:hover {
+    color: var(--foreground);
+  }
+}
+@utility eyebrow {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--growth);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+@utility hero-grid {
+  background-color: var(--background);
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 52px 52px;
+  background-position: center;
+}
+@utility audit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--background);
+  box-shadow: 0 18px 50px color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+@utility report-preview {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  box-shadow: 0 20px 55px color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+@utility pin {
+  position: absolute;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 3px solid var(--background);
+  border-radius: 999px;
+  background: var(--warning);
+  color: var(--foreground);
+  font: 700 0.75rem var(--font-mono);
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--warning) 25%, transparent);
+}
+@utility pin-static {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--warning);
+  font: 700 0.7rem var(--font-mono);
+}
+@utility score-sm {
+  display: grid;
+  width: 2.7rem;
+  height: 2.7rem;
+  place-items: center;
+  border: 4px solid var(--warning);
+  border-radius: 999px;
+  font: 700 0.8rem var(--font-mono);
+}
+@utility section-heading {
+  text-align: center;
+  & .eyebrow {
+    margin-inline: auto;
+  }
+  & h2 {
+    margin-top: 1rem;
+    font-size: clamp(1.85rem, 4vw, 2.75rem);
+    font-weight: 800;
+  }
+  & p {
+    margin: 0.8rem auto 0;
+    max-width: 38rem;
+    color: var(--muted-foreground);
+  }
+}
+@utility feature-card {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 1.75rem;
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+@utility icon-box {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 0.4rem;
+  background: color-mix(in oklab, var(--growth) 12%, var(--background));
+  color: var(--growth);
+  & svg {
+    width: 1.25rem;
+  }
+}
+@utility toggle {
+  border-radius: 0.3rem;
+  padding: 0.5rem 0.8rem;
+  color: var(--muted-foreground);
+}
+@utility toggle-active {
+  border-radius: 0.3rem;
+  padding: 0.5rem 0.8rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+@utility price-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 2rem;
+}
+@utility price-hot {
+  border-color: var(--growth);
+  box-shadow: 0 8px 30px color-mix(in oklab, var(--growth) 12%, transparent);
+}
+@utility popular {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: var(--growth);
+  color: var(--growth-foreground);
+  padding: 0.25rem 0.55rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+@utility credit-pill {
+  align-items: center;
+  border: 1px solid color-mix(in oklab, var(--warning) 35%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--warning) 10%, var(--background));
+  padding: 0.35rem 0.65rem;
+  font: 600 0.7rem var(--font-mono);
+}
+@utility pulse-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--growth);
+  animation: pulse 1.4s infinite;
+}
+@utility process-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.8rem;
+  & svg {
+    width: 1.2rem;
+  }
+}
+@utility process-active {
+  border-color: color-mix(in oklab, var(--growth) 55%, var(--border));
+  background: color-mix(in oklab, var(--growth) 5%, var(--background));
+}
+@utility skeleton-preview {
+  display: grid;
+  gap: 1rem;
+  opacity: 0.8;
+}
+@utility skeleton-line {
+  height: 1rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  animation: shimmer 1.8s infinite;
+}
+@utility skeleton-block {
+  height: 8rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  animation: shimmer 1.8s infinite;
+}
+@utility skeleton-card {
+  height: 4rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  animation: shimmer 1.8s infinite;
+}
+@utility report-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 1.25rem;
+}
+@utility score-ring {
+  display: grid;
+  width: 5.5rem;
+  height: 5.5rem;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: conic-gradient(var(--warning) var(--score), var(--muted) 0);
+  & > div {
+    display: grid;
+    width: 4.4rem;
+    height: 4.4rem;
+    place-items: center;
+    align-content: center;
+    border-radius: inherit;
+    background: var(--card);
+  }
+}
+@utility summary-box {
+  border-left: 4px solid var(--growth);
+  border-radius: 0.3rem;
+  background: var(--card);
+  padding: 1.5rem;
+  box-shadow: 0 1px 4px color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+@utility section-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  & h2 {
+    margin-top: 0.5rem;
+    font-size: 1.75rem;
+    font-weight: 800;
+  }
+}
+@utility finding-card {
+  display: flex;
+  gap: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 1.4rem;
+}
+@utility priority-no {
+  font: 700 1.15rem var(--font-mono);
+  color: var(--warning);
+}
+@utility badge-warning {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--warning) 15%, var(--background));
+  color: color-mix(in oklab, var(--warning) 70%, var(--foreground));
+  padding: 0.25rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+@utility badge-neutral {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+@utility detail-good {
+  border-left: 2px solid var(--growth);
+  padding-left: 1rem;
+}
+@utility stat-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 1.25rem;
+}
+@utility score-chip {
+  display: inline-grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--growth) 14%, var(--background));
+  color: var(--growth);
+  font-weight: 700;
+}
+@utility upgrade-option {
+  display: flex;
+  min-height: 12rem;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 1.25rem;
+  text-align: left;
+}
+@utility upgrade-best {
+  border-color: var(--growth);
+}
 
-@keyframes pulse { 50% { opacity: .3; transform: scale(1.35); } }
-@keyframes shimmer { 50% { opacity: .45; } }
-@media (min-width: 640px) { .section-shell { padding-inline: 2rem; } }
-@media (max-width: 639px) { .audit-bar > button { width: calc(100% - .75rem); } .finding-card { flex-direction: column; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; } }
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+    transform: scale(1.35);
+  }
+}
+@keyframes shimmer {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (min-width: 640px) {
+  .section-shell {
+    padding-inline: 2rem;
+  }
+}
+@media (max-width: 639px) {
+  .audit-bar > button {
+    width: calc(100% - 0.75rem);
+  }
+  .finding-card {
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+  }
+}
