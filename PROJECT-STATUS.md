@@ -1,7 +1,7 @@
 # Project Status — GrowthLens (Codrithm Audit AI)
 
-**Last Updated:** Aug 8, 2026
-**Stage:** Early MVP
+**Last Updated:** Aug 11, 2026
+**Stage:** Early MVP — frontend + pipeline built; production services not yet wired (demo mode)
 
 ---
 
@@ -98,7 +98,10 @@
 
 - [ ] Set up Supabase project and run database migrations
 - [ ] Wire real values into `.env.local` (Supabase, Browserless, OpenAI)
-- [ ] Implement authentication (Supabase Auth or Google SSO + Magic Link)
+- [ ] Implement authentication (Supabase Auth: Google SSO + Magic Link)
 - [ ] Run an end-to-end audit with real Trigger.dev + API keys
+- [ ] Enforce credit deduction, domain-cache RLS, and rate limiting
 - [ ] (Optional) Implement Stripe checkout + webhooks
 - [ ] Set up CI/CD pipeline
+
+> The consolidated remaining-work list lives in [`implementation.md`](implementation.md).

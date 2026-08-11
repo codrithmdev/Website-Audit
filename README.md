@@ -36,26 +36,30 @@ GrowthLens takes a website URL and produces a prioritized, business-first action
 
 ```
 src/
-├── components/ui/          # 46 shadcn/ui components
-├── hooks/                  # Custom React hooks
+├── components/
+│   ├── pdf/AuditPDFDocument.tsx  # Server-rendered report PDF (@react-pdf/renderer)
+│   └── ui/                       # shadcn/ui components
+├── hooks/                        # Custom React hooks
 ├── lib/
-│   ├── utils.ts            # cn() utility (clsx + tailwind-merge)
-│   ├── error-page.ts       # Static HTML error page renderer
-│   ├── error-capture.ts    # Server-side error capture
-│   └── scraper/
-│       ├── browser.ts      # Playwright + Browserless.io page scraper
-│       └── lighthouse.ts   # Lighthouse audit runner
+│   ├── schemas/audit.ts          # Zod schema for AI audit output
+│   ├── scraper/
+│   │   ├── browser.ts            # Playwright + Browserless.io page scraper
+│   │   └── lighthouse.ts         # Lighthouse audit runner
+│   ├── services/audit-service.ts # Server functions (startAudit/getAuditStatus/getMyAudits/getProfile)
+│   ├── supabase/                 # Supabase admin/browser clients
+│   ├── utils.ts                  # cn() utility (clsx + tailwind-merge)
+│   ├── error-page.ts             # Static HTML error page renderer
+│   └── error-capture.ts          # Server-side error capture
 ├── routes/
-│   ├── __root.tsx          # Root layout, error boundary, 404 page
-│   └── index.tsx           # Main app UI (Landing + Processing + Report + Dashboard)
-├── trigger/
-│   ├── audit-pipeline.ts   # Trigger.dev task stub
-│   └── audit-pipeline1.ts  # Full audit pipeline
-├── styles.css              # Tailwind v4 design system (203 lines)
-├── router.tsx              # TanStack Router factory
-├── server.ts               # SSR server entry
-├── shims.d.ts              # Type declarations for server-side dependencies
-└── start.ts                # TanStack Start setup
+│   ├── __root.tsx                # Root layout, error boundary, 404 page
+│   └── index.tsx                 # Main app UI (Landing + Processing + Report + Dashboard)
+├── trigger/audit-pipeline1.ts    # Full Trigger.dev audit pipeline
+├── styles.css                    # Tailwind v4 design system
+├── router.tsx                    # TanStack Router factory
+├── server.ts                     # SSR server entry
+└── start.ts                      # TanStack Start setup
+
+supabase/migrations/0001_init.sql  # Schema + RLS + RPCs + storage buckets
 ```
 
 ## Getting Started
@@ -93,14 +97,30 @@ npm run format       # Prettier
 
 ## Environment Variables
 
-Create a `.env.local` file for the audit pipeline (Trigger.dev background tasks):
+Create a `.env.local` file for the audit pipeline (Trigger.dev background tasks). The app runs in **demo mode** (simulated audits) when Supabase keys are absent; adding the keys enables live audits.
 
 | Variable                    | Purpose                                        |
 | --------------------------- | ---------------------------------------------- |
 | `BROWSERLESS_API_KEY`       | Browserless.io WebSocket connection token      |
 | `SUPABASE_URL`              | Supabase project URL                           |
+| `SUPABASE_ANON_KEY`         | Supabase public/anon key (client-side, RLS)    |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin/service-role key (bypasses RLS) |
 | `OPENAI_API_KEY`            | OpenAI API key for AI analysis                 |
+
+## Current Status
+
+The full product is built and type-safe (`tsc --noEmit` clean), but the backend services are **not yet wired to real credentials**, so the app currently runs simulated audits. What's done vs. what's left:
+
+**Done** — Frontend (Landing/Processing/Report/Dashboard), design system, 6-step audit pipeline, scraper, Lighthouse, AI analysis, PDF engine, Supabase migration SQL, server functions, SSR error handling.
+
+**Remaining** — see [implementation.md](implementation.md) and [PROJECT-STATUS.md](PROJECT-STATUS.md). In short:
+1. Apply the Supabase migration to a real project
+2. Fill in real `.env.local` values
+3. Wire real auth (Google SSO + Magic Link)
+4. Run a live Trigger.dev audit end-to-end
+5. Enforce credits / domain-cache RLS / rate limiting
+6. Show real PDFs + screenshots in the Report
+7. (Post-MVP) Stripe billing + CI/CD
 
 ## Audit Pipeline
 
