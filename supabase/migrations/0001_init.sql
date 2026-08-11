@@ -94,30 +94,39 @@ alter table public.domain_cache enable row level security;
 alter table public.credit_transactions enable row level security;
 
 -- Users can read/update their own profile
+drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
   for select using (auth.uid() = id);
+drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
   for update using (auth.uid() = id);
 
 -- Subscriptions readable/writable by owning user
+drop policy if exists "subscriptions_select_own" on public.subscriptions;
 create policy "subscriptions_select_own" on public.subscriptions
   for select using (auth.uid() = user_id);
+drop policy if exists "subscriptions_insert_own" on public.subscriptions;
 create policy "subscriptions_insert_own" on public.subscriptions
   for insert with check (auth.uid() = user_id);
+drop policy if exists "subscriptions_update_own" on public.subscriptions;
 create policy "subscriptions_update_own" on public.subscriptions
   for update using (auth.uid() = user_id);
 
 -- Audits readable/writable by owning user
+drop policy if exists "audits_select_own" on public.audits;
 create policy "audits_select_own" on public.audits
   for select using (auth.uid() = user_id);
+drop policy if exists "audits_insert_own" on public.audits;
 create policy "audits_insert_own" on public.audits
   for insert with check (auth.uid() = user_id);
 
 -- Domain cache readable by all (public lookup), written by service role only
+drop policy if exists "domain_cache_select_all" on public.domain_cache;
 create policy "domain_cache_select_all" on public.domain_cache
   for select using (true);
 
 -- Credit transactions readable by owning user
+drop policy if exists "credit_transactions_select_own" on public.credit_transactions;
 create policy "credit_transactions_select_own" on public.credit_transactions
   for select using (auth.uid() = user_id);
 
@@ -143,6 +152,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
@@ -212,9 +222,11 @@ values
 on conflict (id) do nothing;
 
 -- Allow authenticated users to read/upload their own audit assets
+drop policy if exists "audit_assets_select_public" on storage.objects;
 create policy "audit_assets_select_public" on storage.objects
   for select using (bucket_id = 'audit-assets' or bucket_id = 'audit-reports');
 
+drop policy if exists "audit_assets_insert_authenticated" on storage.objects;
 create policy "audit_assets_insert_authenticated" on storage.objects
   for insert with check (
     (bucket_id = 'audit-assets' or bucket_id = 'audit-reports')
