@@ -51,7 +51,7 @@
     "@tanstack/react-router": "^1.170.18",
     "@tanstack/react-start": "^1.168.32",
     "@tanstack/router-plugin": "^1.168.23",
-    "@trigger.dev/sdk": "4.5.9",
+    "@trigger.dev/sdk": "4.5.10",
     "ai": "^7.0.57",
     "chrome-launcher": "^1.2.1",
     "class-variance-authority": "^0.7.1",
@@ -78,7 +78,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@trigger.dev/build": "4.5.9",
+    "@trigger.dev/build": "4.5.10",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
