@@ -368,7 +368,7 @@ Budget cap: set a monthly OpenAI spend limit and monitor cost per lead.
 
 ### AI
 
-- OpenAI API using `gpt-4o-mini` for cost efficiency.
+- OpenRouter AI using `google/gemma-4-26b-a4b-it:free` (free vision model).
 
 ### Screenshot
 

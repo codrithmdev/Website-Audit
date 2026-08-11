@@ -31,7 +31,8 @@ Add these (Production + Preview):
 | `SUPABASE_ANON_KEY`         | Supabase public/anon key (client-side, RLS)    |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin/service-role key (bypasses RLS) |
 | `BROWSERLESS_API_KEY`       | Browserless.io WebSocket token                 |
-| `OPENAI_API_KEY`            | OpenAI key for AI analysis                     |
+| `OPENROUTER_API_KEY`        | OpenRouter key for AI analysis                 |
+| `OPENROUTER_MODEL`          | Optional AI model (default `google/gemma-4-26b-a4b-it:free`) |
 | `TRIGGER_SECRET_KEY`        | Trigger.dev access token (see §3)              |
 
 > ⚠️ **Security:** never expose `SUPABASE_SERVICE_ROLE_KEY` or `TRIGGER_SECRET_KEY` to the browser. They are only read server-side.

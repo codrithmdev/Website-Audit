@@ -27,7 +27,7 @@ GrowthLens takes a website URL and produces a prioritized, business-first action
 | Task Queue         | Trigger.dev SDK v3                                   |
 | Browser Automation | Playwright (via Browserless.io)                      |
 | Performance Audit  | Lighthouse (chrome-launcher)                         |
-| AI                 | Vercel AI SDK + OpenAI gpt-4o-mini                   |
+| AI                 | Vercel AI SDK + OpenRouter (Gemma 4 free vision)     |
 | Database           | Supabase (PostgreSQL)                                |
 | PDF Generation     | @react-pdf/renderer                                  |
 | Package Manager    | npm                                                  |
@@ -105,7 +105,8 @@ Create a `.env.local` file for the audit pipeline (Trigger.dev background tasks)
 | `SUPABASE_URL`              | Supabase project URL                           |
 | `SUPABASE_ANON_KEY`         | Supabase public/anon key (client-side, RLS)    |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin/service-role key (bypasses RLS) |
-| `OPENAI_API_KEY`            | OpenAI API key for AI analysis                 |
+| `OPENROUTER_API_KEY`      | OpenRouter key for AI analysis                 |
+| `OPENROUTER_MODEL`        | Optional AI model override (default: `google/gemma-4-26b-a4b-it:free`) |
 
 ## Current Status
 
@@ -128,7 +129,7 @@ The background audit pipeline (`src/trigger/audit-pipeline1.ts`) runs the follow
 
 1. **Scrape & Screenshot** — Playwright + Browserless.io captures page content and screenshots
 2. **Lighthouse Audit** — Performance, accessibility, and SEO scores
-3. **AI Analysis** — OpenAI gpt-4o-mini generates structured findings (trust, friction, CTA, clarity scores)
+3. **AI Analysis** — OpenRouter Gemma 4 (free vision model) generates structured findings (trust, friction, CTA, clarity scores)
 4. **Growth Score** — Weighted composite: Trust (30%) + Friction (30%) + CTA (20%) + Tech/SEO (20%)
 5. **PDF Generation** — Professional report via @react-pdf/renderer
 6. **Database Commit** — Stores results in Supabase with credit deduction and domain caching

@@ -1,7 +1,7 @@
 import React from "react";
 import { task } from "@trigger.dev/sdk/v3";
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { auditResultSchema } from "@/lib/schemas/audit";
 import { pdf } from "@react-pdf/renderer";
 import { AuditPDFDocument } from "@/components/pdf/AuditPDFDocument";
@@ -52,7 +52,11 @@ export const runGrowthAudit = task({
       // STEP 2: Structured Vision AI Analysis via Vercel AI SDK
       // ----------------------------------------------------------------------
       const { object: aiAnalysis } = await generateObject({
-        model: openai("gpt-4o-mini"),
+        model: createOpenRouter({
+          ...(process.env["OPENROUTER_API_KEY"]
+            ? { apiKey: process.env["OPENROUTER_API_KEY"] }
+            : {}),
+        })(process.env["OPENROUTER_MODEL"] ?? "google/gemma-4-26b-a4b-it:free"),
         schema: auditResultSchema,
         messages: [
           {
