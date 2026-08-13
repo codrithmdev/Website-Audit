@@ -58,11 +58,8 @@ export const runGrowthAudit = task({
             : {}),
         })(process.env["OPENROUTER_MODEL"] ?? "google/gemma-4-26b-a4b-it:free"),
         schema: auditResultSchema,
+        system: `You are an elite CRO and Buyer Psychology Expert. Analyze landing pages strictly through buyer trust, friction points, value proposition clarity, and Call-To-Action (CTA) effectiveness. Output actionable, prioritized "Fix First" recommendations.`,
         messages: [
-          {
-            role: "system",
-            content: `You are an elite CRO and Buyer Psychology Expert. Analyze landing pages strictly through buyer trust, friction points, value proposition clarity, and Call-To-Action (CTA) effectiveness. Output actionable, prioritized "Fix First" recommendations.`,
-          },
           {
             role: "user",
             content: [

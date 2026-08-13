@@ -33,26 +33,30 @@ export async function capturePageData(targetUrl: string): Promise<CapturedPageDa
     });
 
     // Dismiss generic cookie banners if present
-    await page.evaluate(() => {
-      const selectors = [
-        "#onetrust-accept-btn-handler",
-        '[aria-label="Accept cookies"]',
-        'button:has-text("Accept")',
-        'button:has-text("Allow all")',
-      ];
-      for (const selector of selectors) {
-        const btn = document.querySelector(selector) as HTMLButtonElement;
-        if (btn) {
-          btn.click();
-          break;
-        }
+    const cookieSelectors = [
+      "#onetrust-accept-btn-handler",
+      '[aria-label="Accept cookies"]',
+      'button:has-text("Accept")',
+      'button:has-text("Allow all")',
+    ];
+    for (const selector of cookieSelectors) {
+      const locator = page.locator(selector).first();
+      if (await locator.isVisible().catch(() => false)) {
+        await locator.click().catch(() => {});
+        break;
       }
-    });
+    }
 
     // Extract Page Metadata
-    const title = await page.title();
-    const description = (await page.getAttribute('meta[name="description"]', "content")) || "";
-    const h1Text = (await page.textContent("h1")) || "";
+    const title = (await page.title()) || "";
+    const description = await page.evaluate(() => {
+      const meta = document.querySelector('meta[name="description"]');
+      return meta?.getAttribute("content") ?? "";
+    });
+    const h1Text = await page.evaluate(() => {
+      const h1 = document.querySelector("h1");
+      return h1?.textContent?.trim() ?? "";
+    });
 
     // Capture Full-Page Screenshot
     const imageBuffer = await page.screenshot({
@@ -63,7 +67,7 @@ export async function capturePageData(targetUrl: string): Promise<CapturedPageDa
     return {
       title: title.trim(),
       description: description.trim(),
-      h1Text: h1Text.trim(),
+      h1Text,
       imageBuffer,
     };
   } finally {

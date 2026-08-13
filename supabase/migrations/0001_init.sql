@@ -75,7 +75,7 @@ create table if not exists public.domain_cache (
 create table if not exists public.credit_transactions (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references public.profiles (id) on delete cascade,
-  type       text not null check (type in ('purchase', 'grant', 'deduction', 'renewal')),
+  type       text not null check (type in ('signup_bonus', 'purchase', 'subscription_grant', 'audit_deduction')),
   amount     integer not null,
   audit_id   uuid references public.audits (id) on delete set null,
   metadata   jsonb,
@@ -186,7 +186,7 @@ begin
   where id = p_user_id;
 
   insert into public.credit_transactions (user_id, type, amount, audit_id)
-  values (p_user_id, 'deduction', -1, p_audit_id);
+  values (p_user_id, 'audit_deduction', -1, p_audit_id);
 end;
 $$;
 

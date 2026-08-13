@@ -4,7 +4,7 @@ export default defineConfig({
   project: "proj_isyixjxwxwchnmntortu",
   // Update this path to match your src directory structure:
   dirs: ["./src/trigger"],
-  runtime: "node",
+  runtime: "node-22",
   logLevel: "log",
   build: {
     external: [
