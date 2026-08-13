@@ -38,6 +38,7 @@ create table if not exists public.audits (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references public.profiles (id) on delete cascade,
   target_url     text not null,
+  domain         text not null,
   url_hash       text not null,
   status         text not null default 'pending'
                    check (status in ('pending', 'processing', 'completed', 'failed')),

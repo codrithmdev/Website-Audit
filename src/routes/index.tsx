@@ -1204,7 +1204,7 @@ function Dashboard({
                           View report
                         </Button>
                         {r.pdfReportUrl && (
-                          <Button size="icon" variant="ghost" onClick={() => window.open(r.pdfReportUrl, "_blank")}>
+                          <Button size="icon" variant="ghost" onClick={() => window.open(r.pdfReportUrl!, "_blank")}>
                             <Download />
                           </Button>
                         )}

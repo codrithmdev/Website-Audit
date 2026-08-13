@@ -70,6 +70,7 @@ export const startAudit = createServerFn({ method: "POST" })
 
     const supabase = getSupabaseAdmin();
     const urlHash = crypto.createHash("sha256").update(targetUrl.toLowerCase()).digest("hex");
+    const domain = targetUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
 
     // Domain cache lookup — 0-credit instant return for cached reports.
     const { data: cached } = await supabase
@@ -98,6 +99,7 @@ export const startAudit = createServerFn({ method: "POST" })
       .insert({
         user_id: userId,
         target_url: targetUrl,
+        domain,
         url_hash: urlHash,
         status: "pending",
       })
