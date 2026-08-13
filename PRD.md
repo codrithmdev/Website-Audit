@@ -318,20 +318,19 @@ The product will be considered differentiated if users say:
 
 | Component  |            Cost Driver |                 Estimate |
 | ---------- | ---------------------: | -----------------------: |
-| OpenAI API |       Tokens per audit |    ~$0.05–0.15 per audit |
+| OpenRouter AI |       Tokens per audit |    ~$0.00–0.10 per audit |
 | Vercel     | Hosting and serverless | Free tier → Pro ($20/mo) |
 | Supabase   |  Database reads/writes | Free tier → Pro ($25/mo) |
+| Browserless |  Screenshot capture    | Free tier → paid by usage |
 | Lighthouse |           Runs locally |                     Free |
-| Playwright |     Screenshot capture |                     Free |
+| Trigger.dev |       Worker execution | Free tier → Pro ($25/mo) |
 
-Budget cap: set a monthly OpenAI spend limit and monitor cost per lead.
+Budget cap: set a monthly AI spend limit and monitor cost per lead.
 
 ---
 
 ## 15. Future Features
 
-- User accounts.
-- Audit history.
 - White-label reports.
 - Industry-specific audits.
 - Competitor comparison.
@@ -347,32 +346,38 @@ Budget cap: set a monthly OpenAI spend limit and monitor cost per lead.
 
 ### Frontend
 
-- Next.js.
+- TanStack Start (SSR).
 - TypeScript.
 - Tailwind CSS.
 - shadcn/ui.
 
 ### Backend
 
-- Next.js API Routes.
+- TanStack Start server functions + Trigger.dev v3 workers.
 
 ### Database
 
 - Supabase PostgreSQL.
-- `audits` table: id, url, scores, ai_insights, pdf_url, created_at.
-- `usage` table: ip, audit_count, last_audit_at.
+- `audits` table: id, user_id, url, domain, scores, ai_insights, pdf_url, created_at.
+- `profiles` table: id, credits_balance.
+- `credit_transactions` table: user_id, amount, type, audit_id.
+- `domain_cache` table: url_hash, domain, audit_id, expires_at.
+
+### Authentication
+
+- Supabase Auth (email/password), SSR sessions via `@supabase/ssr`.
 
 ### Automation
 
-- n8n.
+- Trigger.dev v3 (task `run-growth-audit`).
 
 ### AI
 
-- OpenRouter AI using `google/gemma-4-26b-a4b-it:free` (free vision model).
+- OpenRouter AI using `google/gemma-4-26b-a4b-it:free` (free vision model, overridable via `OPENROUTER_MODEL`).
 
 ### Screenshot
 
-- Playwright.
+- Playwright (via Browserless.io).
 
 ### Performance
 
@@ -386,12 +391,13 @@ Budget cap: set a monthly OpenAI spend limit and monitor cost per lead.
 
 ## 17. Out of Scope (MVP)
 
-- Authentication.
 - Billing.
 - Team workspaces.
 - Multi-language support.
 - Browser extension.
 - Mobile app.
+
+> Note: authentication (email/password) is implemented in the MVP; billing and the items above remain out of scope.
 
 ---
 

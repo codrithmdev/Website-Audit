@@ -1,11 +1,11 @@
-# 🚀 Implementation Roadmap — Codrithm Audit AI
+# Implementation Roadmap — Codrithm Audit AI
 
-**Product:** AI-assisted Website Growth Diagnostic Platform  
-**Last Updated:** August 2026  
+**Product:** AI-assisted Website Growth Diagnostic Platform
+**Last Updated:** August 14, 2026
 
 ---
 
-> The full stack is built and wired end-to-end (see README + PROJECT-STATUS.md). The app currently runs in **demo mode** (simulated audits) until the production services below are connected. This file lists only what remains to be done.
+> The full stack is built, deployed, and verified live (see README + PROJECT-STATUS.md). Real audits run end-to-end on the Trigger.dev prod worker and auth is wired with Supabase email/password + SSR sessions. This file lists what remains.
 
 ---
 
@@ -15,63 +15,50 @@
 | :--- | :--- |
 | Frontend (Landing / Processing / Report / Dashboard) | Complete |
 | Design system (Tailwind v4, light/dark, responsive) | Complete |
-| Audit pipeline (`src/trigger/audit-pipeline1.ts`, 6 steps) | Implemented |
-| Scraper (Browserless + Playwright) | Implemented |
-| Lighthouse audit | Implemented |
-| AI analysis (`ai` + `@ai-sdk/openai`, `generateObject`) | Implemented |
-| PDF engine (`AuditPDFDocument.tsx` + Zod schema) | Complete |
-| Supabase migration SQL (tables, RLS, RPCs, buckets) | Written |
-| Server functions (`startAudit` / `getAuditStatus` / `getMyAudits` / `getProfile`) | Implemented |
-| Type safety (`tsc --noEmit` clean) | Passing |
+| Audit pipeline (`src/trigger/audit-pipeline1.ts`, 6 steps) | Live, verified E2E |
+| Scraper (Browserless + Playwright) | Live |
+| Lighthouse audit | Live (scores in `report_json.technicalPerformance`) |
+| AI analysis (OpenRouter Gemma 4 free vision, 3× retry) | Live |
+| PDF engine (`AuditPDFDocument.tsx` + Zod schema) | Live (uploads to `audit-reports` bucket) |
+| Supabase migration (tables, RLS, RPCs, buckets) | Applied to project `dxezxcjylbpkmlmvqjxo` |
+| Server functions (`startAudit` / `getAuditStatus` / `getMyAudits` / `getProfile`) | Live, session-based |
+| Auth (email/password + SSR sessions) | Live (`signUp`/`signIn`/`signOut`/`getSession`) |
+| Type safety (`tsc --noEmit` clean) + production build | Passing |
+| Deployment (Vercel + Trigger.dev prod + Supabase) | Live at https://website-audit.vercel.app/ |
 
 ---
 
 ## 📋 Remaining Work
 
-### 1. Production Setup (Blocking)
+### 1. Credit Management & Billing
 
-- `[ ]` **Apply the Supabase migration** — run `supabase/migrations/0001_init.sql` against a real project (tables + RLS + 3 RPCs + 2 storage buckets).
-- `[ ]` **Configure `.env.local`** — copy `.env.example` and fill in real Supabase / Browserless / OpenAI values.
-- `[ ]` **Verify storage security policies** for the `audit-assets` and `audit-reports` buckets.
+- `[ ]` **Self-serve credit top-up** — currently credits are granted manually in Supabase (test user hit 0 credits).
+- `[ ]` **Stripe billing** — Checkout, Customer Portal, and webhook endpoints (`purchase` transactions).
+- `[ ]` **Verify `handle_new_user()` trigger** grants 1 free credit on signup.
 
-### 2. Authentication (Blocking)
+### 2. Backend Hardening
 
-- `[ ]` **Wire real auth** — Supabase Auth UI (Google SSO + Magic Link).
-- `[ ]` **Session persistence** in `@tanstack/react-start` (client + server clients).
-- `[ ]` **Auto-redirect to dashboard** after login; tie the dashboard to the logged-in user.
-- `[ ]` **Onboarding credit** — confirm `handle_new_user()` grants 1 free credit on signup.
-
-### 3. End-to-End Verification (Blocking)
-
-- `[ ]` **Run a real audit** — `npx trigger.dev@latest dev` and fire `startAudit` against a live task.
-- `[ ]` **Validate the full pipeline** — browser capture → storage upload → OpenAI inference → PDF render → DB commit → credit deduction.
-
-### 4. Backend Hardening
-
-- `[ ]` **Enforce credit deduction** — verify the `deduct_user_credit()` RPC runs atomically on audit completion.
-- `[ ]` **Domain cache RLS policy** — lock down `domain_cache` so cached reports are readable without exposing other users' data.
 - `[ ]` **Rate limiting** — per-IP audit limits (10/hour target per PRD).
+- `[ ]` **`domain_cache` RLS policy** — lock down so cached reports are readable without exposing other users' data.
+- `[ ]` **Consider switching AI model** — the free Gemma model intermittently returns output that fails schema validation (mitigated with a 3× retry). A paid model via `OPENROUTER_MODEL` would be more reliable.
 
-### 5. Report Polish
+### 3. Report Polish
 
-- `[ ]` **Render real assets in the Report view** — show `screenshot_url` and `pdf_report_url` once real runs produce them (currently demo fallbacks).
+- `[ ]` **Visual screenshot highlight section** in the PDF template (screenshot is captured and stored but not annotated in the PDF).
 - `[ ]` **PDF generation memory testing** — verify serverless memory footprint when compiling large PDFs.
-- `[ ]` **Visual screenshot highlight section** in the PDF template.
 
-### 6. Optional / Post-MVP
+### 4. Optional / Post-MVP
 
-- `[ ]` **Stripe billing** — Checkout, Customer Portal, and webhook endpoints.
 - `[ ]` **CI/CD pipeline** — lint + typecheck + build on push; deploy hooks.
 - `[ ]` **NPM vulnerability cleanup** — 20 upstream OpenTelemetry vulns in `@trigger.dev` (needs Trigger.dev v3 migration).
 - `[ ]` **Recharts v3 upgrade** — v2 currently deprecated (functional).
+- `[ ]` **White-label reports, competitor comparison, scheduled audits, public API** (future features per PRD).
 
 ---
 
-## 🎯 Priority Order
+## Priority Order
 
-1. Apply Supabase migration → configure `.env.local`
-2. Wire real auth (Google SSO + Magic Link)
-3. Run the end-to-end Trigger.dev audit
-4. Enforce credits / domain-cache RLS / rate limiting
-5. Show real PDFs + screenshots in the Report
-6. Stripe billing + CI/CD (post-MVP)
+1. Credit top-up (Stripe or admin) so users aren't blocked at 0 credits
+2. Enforce rate limiting + `domain_cache` RLS
+3. (Optional) Paid AI model for more reliable structured output
+4. (Optional) CI/CD + Stripe webhooks + PDF annotation polish
