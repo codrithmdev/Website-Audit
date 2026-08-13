@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowRight,
   PanelsTopLeft,
@@ -32,8 +32,9 @@ import {
   getAuditStatus,
   getMyAudits,
   getProfile,
+  type StoredAuditReport,
 } from "@/lib/services/audit-service";
-import type { AuditResult } from "@/lib/schemas/audit";
+import { signIn as signInFn, signUp as signUpFn, signOut as signOutFn, getSession } from "@/lib/services/auth-service";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -73,33 +76,6 @@ export const Route = createFileRoute("/")({
   component: GrowthLensApp,
 });
 
-const findings = [
-  {
-    title: "Clarify the primary promise above the fold",
-    impact: "High impact",
-    effort: "Low effort",
-    problem: "The headline describes a service, but not the business outcome buyers get.",
-    why: "Visitors must interpret the offer before deciding to continue, increasing early exits.",
-    action: "Lead with a measurable customer outcome and support it with one clear proof point.",
-  },
-  {
-    title: "Add proof next to the primary CTA",
-    impact: "High impact",
-    effort: "Medium effort",
-    problem: "The core action appears before any recognizable customer or outcome evidence.",
-    why: "High-intent visitors hesitate at the exact moment you ask them to commit.",
-    action: "Place 3 customer logos and one quantified result directly below the hero CTA.",
-  },
-  {
-    title: "Reduce competing navigation choices",
-    impact: "Medium impact",
-    effort: "Low effort",
-    problem: "Six equal-weight navigation links compete with the main conversion path.",
-    why: "Choice overload dilutes attention and lowers clicks on the highest-value action.",
-    action: "Group secondary resources and retain one visually dominant header CTA.",
-  },
-];
-
 function Brand() {
   return (
     <button
@@ -126,14 +102,17 @@ function GrowthLensApp() {
     [url, setUrl] = useState("https://yourcompany.com"),
     [progress, setProgress] = useState(0),
     [upgrade, setUpgrade] = useState(false),
-    [loggedIn, setLoggedIn] = useState(false),
+    [user, setUser] = useState<{ id: string; email: string } | null>(null),
+    [authOpen, setAuthOpen] = useState(false),
+    [authMode, setAuthMode] = useState<"signin" | "signup">("signin"),
+    [sessionLoading, setSessionLoading] = useState(true),
     [menu, setMenu] = useState(false),
-    [credits, setCredits] = useState(8),
+    [credits, setCredits] = useState(0),
     [auditResult, setAuditResult] = useState<{
       id: string;
       status: string;
       score: number | null;
-      report: AuditResult | null;
+      report: StoredAuditReport | null;
       screenshotUrl: string | null;
       pdfUrl: string | null;
     } | null>(null),
@@ -148,15 +127,22 @@ function GrowthLensApp() {
       }>
     >([]);
   useEffect(() => {
-    if (loggedIn) {
-      getMyAudits({ data: undefined })
-        .then((r) => setMyAudits(r.audits))
-        .catch(() => {});
-      getProfile({ data: undefined })
-        .then((r) => setCredits(r.credits))
-        .catch(() => {});
-    }
-  }, [loggedIn]);
+    getSession({ data: undefined })
+      .then((r) => {
+        setUser(r.user);
+        return r.user ? r.user : null;
+      })
+      .then((activeUser) => {
+        if (!activeUser) return;
+        getMyAudits({ data: undefined })
+          .then((res) => setMyAudits(res.audits))
+          .catch(() => {});
+        getProfile({ data: undefined })
+          .then((res) => setCredits(res.credits))
+          .catch(() => {});
+      })
+      .finally(() => setSessionLoading(false));
+  }, []);
   useEffect(() => {
     if (view !== "processing") return;
     setProgress(4);
@@ -175,9 +161,23 @@ function GrowthLensApp() {
     return () => window.clearInterval(id);
   }, [view]);
 
+  const refreshAccount = () => {
+    getMyAudits({ data: undefined })
+      .then((r) => setMyAudits(r.audits))
+      .catch(() => {});
+    getProfile({ data: undefined })
+      .then((r) => setCredits(r.credits))
+      .catch(() => {});
+  };
+
   const startAudit = async () => {
     if (!url.trim()) {
       toast.error("Enter a website URL to continue");
+      return;
+    }
+    if (!user) {
+      setAuthMode("signin");
+      setAuthOpen(true);
       return;
     }
     setView("processing");
@@ -197,6 +197,7 @@ function GrowthLensApp() {
             pdfUrl: res.pdfUrl ?? null,
           });
           setView("report");
+          refreshAccount();
           return;
         }
         window.setTimeout(started, 2000);
@@ -204,7 +205,12 @@ function GrowthLensApp() {
       started();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong starting the audit.";
-      if (msg === "INSUFFICIENT_CREDITS") {
+      if (msg === "AUTH_REQUIRED") {
+        setAuthMode("signin");
+        setAuthOpen(true);
+        setView("landing");
+        toast.error("Please sign in to run an audit.");
+      } else if (msg === "INSUFFICIENT_CREDITS") {
         setUpgrade(true);
         setView("landing");
         toast.error("You're out of audit credits.");
@@ -212,6 +218,40 @@ function GrowthLensApp() {
         setView("landing");
         toast.error(msg);
       }
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOutFn({ data: undefined });
+    } catch {
+      // still clear local state below
+    }
+    setUser(null);
+    setCredits(0);
+    setMyAudits([]);
+    setAuditResult(null);
+    setView("landing");
+    toast.success("Signed out.");
+  };
+  const handleViewReport = async (auditId: string) => {
+    try {
+      const res = await getAuditStatus({ data: auditId });
+      if (res.status === "completed" || res.status === "failed") {
+        setAuditResult({
+          id: auditId,
+          status: res.status,
+          score: res.score ?? null,
+          report: res.report ?? null,
+          screenshotUrl: res.screenshotUrl ?? null,
+          pdfUrl: res.pdfUrl ?? null,
+        });
+        setView("report");
+      } else {
+        toast.info("This audit is still processing.");
+      }
+    } catch {
+      toast.error("Couldn't load that audit.");
     }
   };
   if (view === "processing")
@@ -232,8 +272,11 @@ function GrowthLensApp() {
         onReport={() => setView("report")}
         onNew={() => setView("landing")}
         onUpgrade={() => setUpgrade(true)}
+        onSignOut={handleSignOut}
+        onViewReport={handleViewReport}
         audits={myAudits}
         credits={credits}
+        user={user}
       />
     );
   return (
@@ -256,7 +299,7 @@ function GrowthLensApp() {
             </a>
           </nav>
           <div className="hidden min-w-0 items-center justify-end gap-2 md:flex">
-            {loggedIn ? (
+            {user ? (
               <>
                 <span className="credit-pill hidden xl:inline-flex">⚡ {credits} Credits Left</span>
                 <Button variant="ghost" onClick={() => setView("dashboard")}>
@@ -265,14 +308,15 @@ function GrowthLensApp() {
                 <Button
                   size="icon"
                   className="shrink-0 rounded-full"
-                  onClick={() => setLoggedIn(false)}
+                  onClick={handleSignOut}
+                  title="Sign out"
                 >
-                  AM
+                  {(user.email ?? "AM").slice(0, 2).toUpperCase()}
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="ghost" className="shrink-0" onClick={() => setLoggedIn(true)}>
+                <Button variant="ghost" className="shrink-0" onClick={() => { setAuthMode("signin"); setAuthOpen(true); }}>
                   Sign in
                 </Button>
                 <Button
@@ -302,24 +346,50 @@ function GrowthLensApp() {
               <a href="#pricing">Pricing</a>
               <a href="#docs">Docs</a>
               <div className="grid grid-cols-2 gap-2 border-t pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setLoggedIn(true);
-                    setMenu(false);
-                  }}
-                >
-                  Sign in
-                </Button>
-                <Button
-                  variant="growth"
-                  onClick={() => {
-                    setMenu(false);
-                    document.querySelector("input")?.focus();
-                  }}
-                >
-                  Start free audit
-                </Button>
+                {user ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        setMenu(false);
+                        await handleSignOut();
+                      }}
+                    >
+                      Sign out
+                    </Button>
+                    <Button
+                      variant="growth"
+                      onClick={() => {
+                        setMenu(false);
+                        setView("dashboard");
+                      }}
+                    >
+                      Dashboard
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setMenu(false);
+                        setAuthMode("signin");
+                        setAuthOpen(true);
+                      }}
+                    >
+                      Sign in
+                    </Button>
+                    <Button
+                      variant="growth"
+                      onClick={() => {
+                        setMenu(false);
+                        document.querySelector("input")?.focus();
+                      }}
+                    >
+                      Start free audit
+                    </Button>
+                  </>
+                )}
               </div>
             </nav>
           </div>
@@ -405,8 +475,12 @@ function GrowthLensApp() {
                 />
                 <PreviewFinding n="03" title="Too many competing actions" tag="Medium" />
               </div>
-              <Button variant="link" className="mt-5 px-0" onClick={() => setView("report")}>
-                Explore the full sample report <ArrowRight />
+              <Button
+                variant="link"
+                className="mt-5 px-0"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              >
+                Run your own audit <ArrowRight />
               </Button>
             </div>
           </div>
@@ -461,6 +535,17 @@ function GrowthLensApp() {
         </div>
       </footer>
       <UpgradeModal open={upgrade} onOpenChange={setUpgrade} />
+      <AuthDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onAuthenticated={(u) => {
+          setUser(u);
+          setAuthOpen(false);
+          refreshAccount();
+        }}
+      />
     </div>
   );
 }
@@ -665,15 +750,15 @@ function Report({
     id: string;
     status: string;
     score: number | null;
-    report: AuditResult | null;
+    report: StoredAuditReport | null;
     screenshotUrl: string | null;
     pdfUrl: string | null;
   } | null;
 }) {
   const domain = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const liveScore = result?.score ?? 72;
+  const liveScore = result?.score ?? null;
   const liveReport = result?.report;
-  const screenshotSrc = result?.screenshotUrl ?? auditTarget;
+  const screenshotSrc = result?.screenshotUrl ?? null;
   const copy = () => {
     navigator.clipboard?.writeText(location.href);
     toast.success("Report URL copied to clipboard!");
@@ -684,7 +769,6 @@ function Report({
         <div className="mx-auto grid h-16 max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center px-5 lg:px-8">
           <Brand />
           <div className="flex items-center gap-2">
-            <span className="credit-pill hidden sm:inline-flex">⚡ 8 Credits Left</span>
             <Button variant="ghost" size="sm" onClick={onDashboard}>
               <LayoutDashboard /> Dashboard
             </Button>
@@ -694,22 +778,22 @@ function Report({
       <main className="mx-auto max-w-7xl px-5 py-8 lg:px-8">
         <div className="report-banner">
           <div className="flex min-w-0 items-center gap-4">
-            <img
-              src={screenshotSrc}
-              alt={`Audited homepage for ${domain}`}
-              width={160}
-              height={100}
-              className="hidden h-20 w-32 rounded-sm border object-cover sm:block"
-            />
+            {screenshotSrc && (
+              <img
+                src={screenshotSrc}
+                alt={`Audited homepage for ${domain}`}
+                width={160}
+                height={100}
+                className="hidden h-20 w-32 rounded-sm border object-cover sm:block"
+              />
+            )}
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase text-growth">Executive growth audit</p>
               <h1 className="truncate text-2xl font-bold">{domain}</h1>
-              <p className="metric mt-1 text-xs text-muted-foreground">
-                Aug 6, 2026 · 12:06 PM · Homepage
-              </p>
+              <p className="metric mt-1 text-xs text-muted-foreground">Homepage</p>
             </div>
           </div>
-          <Score value={liveScore} />
+          {liveScore !== null && <Score value={liveScore} />}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
@@ -718,7 +802,7 @@ function Report({
               if (result?.pdfUrl) {
                 window.open(result.pdfUrl, "_blank");
               } else {
-                toast.success("PDF report download started");
+                toast.info("PDF report is not ready yet.");
               }
             }}
           >
@@ -737,6 +821,22 @@ function Report({
             Get more credits
           </Button>
         </div>
+        {!liveReport ? (
+          <section className="mt-8 rounded-lg border bg-card p-10 text-center">
+            <div className="icon-box mx-auto">
+              <Trash2 />
+            </div>
+            <h2 className="mt-4 text-lg font-bold">This audit didn't complete</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              We couldn't produce a report for this site. If you just ran this audit, it may still
+              be processing — refresh in a moment. Otherwise try re-auditing the URL.
+            </p>
+            <Button variant="growth" className="mt-5" onClick={onReaudit}>
+              <RefreshCw /> Re-audit
+            </Button>
+          </section>
+        ) : (
+        <>
         <section className="summary-box mt-8">
           <div className="flex items-center gap-2">
             <Sparkles className="text-growth" />
@@ -745,26 +845,18 @@ function Report({
           <div className="mt-6 grid gap-5 md:grid-cols-3">
             <Summary
               label="Trust"
-              text={
-                liveReport?.trustSignalSummary ??
-                "Professional appearance, but proof arrives too late in the journey."
-              }
-              status={liveReport ? `${liveReport.trustScore}/100` : "Needs work"}
+              text={liveReport.trustSignalSummary ?? ""}
+              status={`${liveReport.trustScore}/100`}
             />
             <Summary
               label="Message clarity"
-              text={
-                liveReport?.valuePropClarity ??
-                "The offer is clear, but the outcome and differentiation are not."
-              }
-              status={liveReport ? `${liveReport.clarityScore}/100` : "Fair"}
+              text={liveReport.valuePropClarity ?? ""}
+              status={`${liveReport.clarityScore}/100`}
             />
             <Summary
               label="Conversion friction"
-              text={
-                liveReport?.heroCritique ?? "Too many competing paths weaken your primary action."
-              }
-              status={liveReport ? `${liveReport.frictionScore}/100` : "High friction"}
+              text={liveReport.heroCritique ?? ""}
+              status={`${liveReport.frictionScore}/100`}
             />
           </div>
         </section>
@@ -775,11 +867,11 @@ function Report({
               <h2>Fix first</h2>
             </div>
             <span className="metric text-sm text-muted-foreground">
-              {liveReport?.fixFirst?.length ?? 3} priority findings
+              {liveReport.fixFirst?.length ?? 0} priority findings
             </span>
           </div>
           <div className="mt-6 space-y-4">
-            {(liveReport?.fixFirst ?? findings).map((f, i) => (
+            {(liveReport.fixFirst ?? []).map((f, i) => (
               <article className="finding-card" key={f.title}>
                 <div className="priority-no">0{i + 1}</div>
                 <div className="min-w-0 flex-1">
@@ -807,32 +899,31 @@ function Report({
           </div>
           <div className="mt-6 grid overflow-hidden rounded-lg border bg-card lg:grid-cols-[1fr_320px]">
             <div className="relative bg-primary p-4">
-              <img
-                src={screenshotSrc}
-                alt="Annotated audit evidence"
-                width={1280}
-                height={800}
-                loading="lazy"
-                className="w-full rounded-sm"
-              />
-              <span className="pin left-[44%] top-[37%]">1</span>
-              <span className="pin left-[74%] top-[22%]">2</span>
+              {screenshotSrc ? (
+                <img
+                  src={screenshotSrc}
+                  alt="Annotated audit evidence"
+                  width={1280}
+                  height={800}
+                  loading="lazy"
+                  className="w-full rounded-sm"
+                />
+              ) : (
+                <div className="flex aspect-video items-center justify-center text-sm text-muted-foreground">
+                  No screenshot available
+                </div>
+              )}
             </div>
             <div className="divide-y">
-              <Evidence
-                n="1"
-                title="Unclear primary promise"
-                text="The headline names the service, not the result."
-              />
-              <Evidence
-                n="2"
-                title="Missing trust at decision point"
-                text="No customer evidence supports the main CTA."
-              />
+              {(liveReport.fixFirst ?? []).slice(0, 2).map((f, i) => (
+                <Evidence key={f.title} n={String(i + 1)} title={f.title} text={f.problem} />
+              ))}
             </div>
           </div>
         </section>
-        <Breakdown />
+        <Breakdown technicalPerformance={result?.report?.technicalPerformance ?? null} />
+        </>
+        )}
         <section className="mt-14 flex flex-col items-start justify-between gap-6 rounded-lg bg-primary p-8 text-primary-foreground sm:flex-row sm:items-center">
           <div>
             <p className="text-sm font-semibold text-growth">Recommended next step</p>
@@ -887,29 +978,45 @@ function Evidence({ n, title, text }: { n: string; title: string; text: string }
     </div>
   );
 }
-function Breakdown() {
-  const data = {
-    ux: [
-      ["Headline clarity", 68],
-      ["CTA visibility", 74],
-      ["Form friction", 81],
-    ],
-    trust: [
-      ["Testimonials", 52],
-      ["Security cues", 88],
-      ["Contact ease", 64],
-    ],
-    tech: [
-      ["Performance", 83],
-      ["Accessibility", 91],
-      ["Mobile readiness", 78],
-    ],
-    seo: [
-      ["Title & description", 94],
-      ["Open Graph", 71],
-      ["Indexing", 100],
-    ],
-  };
+function Breakdown({
+  technicalPerformance,
+}: {
+  technicalPerformance: {
+    performanceScore?: number;
+    accessibilityScore?: number;
+    seoScore?: number;
+    largestContentfulPaint?: string;
+    cumulativeLayoutShift?: string;
+  } | null;
+}) {
+  const data: Array<{ key: string; tab: string; rows: Array<[string, number]> }> = [];
+  if (technicalPerformance) {
+    data.push({
+      key: "tech",
+      tab: "Performance",
+      rows: [
+        ["Performance", technicalPerformance.performanceScore ?? 0],
+        ["Accessibility", technicalPerformance.accessibilityScore ?? 0],
+      ],
+    });
+    data.push({
+      key: "seo",
+      tab: "SEO basics",
+      rows: [["SEO score", technicalPerformance.seoScore ?? 0]],
+    });
+    const speedRows: Array<[string, number]> = [];
+    const lcp = technicalPerformance.largestContentfulPaint ?? "";
+    const cls = technicalPerformance.cumulativeLayoutShift ?? "";
+    if (lcp) speedRows.push(["Largest Contentful Paint", parseInt(lcp, 10) || 0]);
+    if (cls) speedRows.push(["Cumulative Layout Shift", Math.round(parseFloat(cls) * 100) || 0]);
+    if (speedRows.length)
+      data.push({
+        key: "speed",
+        tab: "Speed & stability",
+        rows: speedRows,
+      });
+  }
+  if (data.length === 0) return null;
   return (
     <section className="mt-14">
       <div className="section-title">
@@ -918,17 +1025,18 @@ function Breakdown() {
           <h2>Audit breakdown</h2>
         </div>
       </div>
-      <Tabs defaultValue="ux" className="mt-6">
+      <Tabs defaultValue={data[0]!.key} className="mt-6">
         <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-lg border bg-card p-1">
-          <TabsTrigger value="ux">UX & conversion</TabsTrigger>
-          <TabsTrigger value="trust">Trust & proof</TabsTrigger>
-          <TabsTrigger value="tech">Performance</TabsTrigger>
-          <TabsTrigger value="seo">SEO basics</TabsTrigger>
+          {data.map((d) => (
+            <TabsTrigger key={d.key} value={d.key}>
+              {d.tab}
+            </TabsTrigger>
+          ))}
         </TabsList>
-        {Object.entries(data).map(([key, rows]) => (
-          <TabsContent value={key} key={key} className="rounded-lg border bg-card p-6">
+        {data.map((d) => (
+          <TabsContent value={d.key} key={d.key} className="rounded-lg border bg-card p-6">
             <div className="grid gap-6 md:grid-cols-3">
-              {rows.map(([label, val]) => (
+              {d.rows.map(([label, val]) => (
                 <div key={String(label)}>
                   <div className="flex justify-between">
                     <span className="text-sm font-semibold">{label}</span>
@@ -954,12 +1062,17 @@ function Dashboard({
   onReport,
   onNew,
   onUpgrade,
+  onSignOut,
+  onViewReport,
   audits,
   credits,
+  user,
 }: {
   onReport: () => void;
   onNew: () => void;
   onUpgrade: () => void;
+  onSignOut: () => void;
+  onViewReport: (id: string) => void;
   audits: Array<{
     id: string;
     target_url: string;
@@ -969,52 +1082,44 @@ function Dashboard({
     pdf_report_url: string | null;
   }>;
   credits: number;
+  user: { id: string; email: string } | null;
 }) {
   const [q, setQ] = useState("");
-  const rows = useMemo(() => {
-    if (audits.length > 0) {
-      return audits.map((a) => ({
-        id: a.id,
-        url: a.target_url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
-        date: new Date(a.created_at).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
-        score: a.overall_score ?? 0,
-        status: a.status,
-        p: a.status === "completed" ? 3 : 0,
-      }));
-    }
-    return [
-      { id: "1", url: "northstar.io", date: "Aug 6, 2026", score: 72, status: "completed", p: 3 },
-      { id: "2", url: "brightpath.co", date: "Aug 2, 2026", score: 84, status: "completed", p: 2 },
-      {
-        id: "3",
-        url: "acme-studio.com",
-        date: "Jul 29, 2026",
-        score: 61,
-        status: "completed",
-        p: 5,
-      },
-    ];
-  }, [audits]);
+  const rows = audits.map((a) => ({
+    id: a.id,
+    url: a.target_url.replace(/^https?:\/\//, "").replace(/\/$/, ""),
+    date: new Date(a.created_at).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    score: a.overall_score ?? 0,
+    status: a.status,
+    p: a.status === "completed" ? 3 : 0,
+    pdfReportUrl: a.pdf_report_url,
+  }));
   const filtered = rows.filter((r) => r.url.includes(q.toLowerCase()));
+  const firstName = (user?.email ?? "Guest").split("@")[0] ?? "there";
   return (
     <div className="min-h-screen bg-canvas">
       <header className="border-b bg-background">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
           <Brand />
-          <Button variant="growth" onClick={onNew}>
-            New audit <ArrowRight />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onSignOut}>
+              Sign out
+            </Button>
+            <Button variant="growth" onClick={onNew}>
+              New audit <ArrowRight />
+            </Button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-growth">Workspace overview</p>
-            <h1 className="mt-1 text-3xl font-bold">Good afternoon, Alex.</h1>
+            <h1 className="mt-1 text-3xl font-bold">Good audit, {firstName}.</h1>
           </div>
           <Button variant="outline" onClick={onUpgrade}>
             ⚡ {credits} credits left
@@ -1051,6 +1156,18 @@ function Dashboard({
             </div>
           </div>
           <div className="overflow-x-auto">
+            {filtered.length === 0 ? (
+              <div className="p-10 text-center">
+                <Globe2 className="mx-auto text-muted-foreground/60" size={32} />
+                <p className="mt-3 text-sm font-semibold">No audits yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Run your first audit from the homepage to see results here.
+                </p>
+                <Button variant="growth" className="mt-5" onClick={onNew}>
+                  Run an audit <ArrowRight />
+                </Button>
+              </div>
+            ) : (
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
@@ -1079,29 +1196,25 @@ function Dashboard({
                     </td>
                     <td>
                       <div className="flex justify-end gap-1 pr-4">
-                        <Button size="sm" variant="ghost" onClick={onReport}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onViewReport(r.id)}
+                        >
                           View report
                         </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => toast.success("PDF download started")}
-                        >
-                          <Download />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => toast.success("Audit removed")}
-                        >
-                          <Trash2 />
-                        </Button>
+                        {r.pdfReportUrl && (
+                          <Button size="icon" variant="ghost" onClick={() => window.open(r.pdfReportUrl, "_blank")}>
+                            <Download />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         </section>
       </main>
@@ -1163,6 +1276,136 @@ function UpgradeModal({
         <div className="flex items-center justify-center gap-2 pt-2 text-xs text-muted-foreground">
           <LockKeyhole size={13} /> Secure checkout · Cancel anytime
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AuthDialog({
+  open,
+  onOpenChange,
+  mode,
+  onModeChange,
+  onAuthenticated,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  mode: "signin" | "signup";
+  onModeChange: (m: "signin" | "signup") => void;
+  onAuthenticated: (u: { id: string; email: string }) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+    if (!busy) {
+      setBusy(true);
+      try {
+        if (mode === "signin") {
+          const res = await signInFn({ data: { email, password } });
+          onAuthenticated(res.user);
+        } else {
+          const res = await signUpFn({ data: { email, password } });
+          if (res.user && !res.requiresEmailConfirmation) {
+            onAuthenticated(res.user);
+          } else {
+            setNotice(
+              "Account created. Check your email to confirm, then sign in.",
+            );
+            onModeChange("signin");
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      } finally {
+        setBusy(false);
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="icon-box mb-3">
+            <LockKeyhole />
+          </div>
+          <DialogTitle className="text-2xl">
+            {mode === "signin" ? "Welcome back" : "Create your account"}
+          </DialogTitle>
+          <DialogDescription>
+            {mode === "signin"
+              ? "Sign in to run audits and access your reports."
+              : "Get 1 free audit credit on sign-up."}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="auth-email">Email</Label>
+            <Input
+              id="auth-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="auth-password">Password</Label>
+            <Input
+              id="auth-password"
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+            />
+          </div>
+          {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+          {notice && <p className="text-sm font-medium text-growth">{notice}</p>}
+          <Button type="submit" variant="growth" className="w-full" disabled={busy}>
+            {busy
+              ? "Please wait…"
+              : mode === "signin"
+                ? "Sign in"
+                : "Create account"}
+          </Button>
+        </form>
+        <p className="text-center text-sm text-muted-foreground">
+          {mode === "signin" ? (
+            <>
+              New to GrowthLens?{" "}
+              <button
+                type="button"
+                className="text-growth font-semibold hover:underline"
+                onClick={() => onModeChange("signup")}
+              >
+                Create an account
+              </button>
+            </>
+          ) : (
+            <>
+              Already have an account?{" "}
+              <button
+                type="button"
+                className="text-growth font-semibold hover:underline"
+                onClick={() => onModeChange("signin")}
+              >
+                Sign in
+              </button>
+            </>
+          )}
+        </p>
       </DialogContent>
     </Dialog>
   );

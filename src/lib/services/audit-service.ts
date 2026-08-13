@@ -3,7 +3,18 @@ import { tasks } from "@trigger.dev/sdk/v3";
 import { z } from "zod";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
+import { getSupabaseAuth } from "@/lib/supabase/auth";
 import type { AuditResult } from "@/lib/schemas/audit";
+
+async function requireUser(): Promise<{ id: string }> {
+  const supabase = getSupabaseAuth();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) throw new Error("AUTH_REQUIRED");
+  return { id: user.id };
+}
 
 const isConfigured = () =>
   Boolean(process.env["SUPABASE_URL"] && process.env["SUPABASE_SERVICE_ROLE_KEY"]);
@@ -18,7 +29,7 @@ const urlSchema = z
   )
   .transform((u) => (u.startsWith("http") ? u : `https://${u}`));
 
-type AuditRow = {
+export type AuditRow = {
   id: string;
   status: "pending" | "processing" | "completed" | "failed";
   overall_score: number | null;
@@ -34,20 +45,31 @@ type AuditRow = {
   created_at: string;
 };
 
+export type StoredAuditReport = AuditResult & {
+  overallScore?: number;
+  technicalPerformance?: {
+    performanceScore?: number;
+    accessibilityScore?: number;
+    seoScore?: number;
+    largestContentfulPaint?: string;
+    cumulativeLayoutShift?: string;
+  };
+};
+
 export const startAudit = createServerFn({ method: "POST" })
-  .validator((data: { targetUrl: string; userId?: string }) => data)
+  .validator((data: { targetUrl: string }) => data)
   .handler(async ({ data }) => {
     const targetUrl = urlSchema.parse(data.targetUrl);
 
     if (!isConfigured()) {
-      // Demo mode: simulate a completed audit when Supabase isn't wired up.
-      await new Promise((r) => setTimeout(r, 900));
-      return { auditId: `demo-${crypto.randomUUID().slice(0, 8)}`, demo: true };
+      // Server-side prerequisites are missing; refuse rather than simulate.
+      throw new Error("Audit service is not configured yet. Please try again later.");
     }
+
+    const { id: userId } = await requireUser();
 
     const supabase = getSupabaseAdmin();
     const urlHash = crypto.createHash("sha256").update(targetUrl.toLowerCase()).digest("hex");
-    const userId = data.userId ?? "00000000-0000-0000-0000-000000000000";
 
     // Domain cache lookup — 0-credit instant return for cached reports.
     const { data: cached } = await supabase
@@ -96,9 +118,10 @@ export const startAudit = createServerFn({ method: "POST" })
 export const getAuditStatus = createServerFn({ method: "GET" })
   .validator((auditId: string) => auditId)
   .handler(async ({ data: auditId }) => {
-    if (!isConfigured() || auditId.startsWith("demo-")) {
-      return { status: "completed" as const, demo: true };
+    if (!isConfigured()) {
+      throw new Error("Audit service is not configured yet.");
     }
+    await requireUser();
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -112,9 +135,8 @@ export const getAuditStatus = createServerFn({ method: "GET" })
 
     return {
       status: data.status,
-      demo: false,
       score: data.overall_score,
-      report: data.report_json as AuditResult | null,
+      report: data.report_json as StoredAuditReport | null,
       screenshotUrl: data.screenshot_url,
       pdfUrl: data.pdf_report_url,
       error: data.error_message,
@@ -122,9 +144,11 @@ export const getAuditStatus = createServerFn({ method: "GET" })
   });
 
 export const getMyAudits = createServerFn({ method: "GET" })
-  .validator((userId?: string) => userId)
-  .handler(async ({ data: userId }) => {
-    if (!isConfigured() || !userId) return { audits: [] };
+  .validator((data: undefined) => data)
+  .handler(async () => {
+    if (!isConfigured()) return { audits: [] };
+    const { id: userId } = await requireUser().catch(() => ({ id: "" }));
+    if (!userId) return { audits: [] };
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -139,9 +163,11 @@ export const getMyAudits = createServerFn({ method: "GET" })
   });
 
 export const getProfile = createServerFn({ method: "GET" })
-  .validator((userId?: string) => userId)
-  .handler(async ({ data: userId }) => {
-    if (!isConfigured() || !userId) return { credits: 0 };
+  .validator((data: undefined) => data)
+  .handler(async () => {
+    if (!isConfigured()) return { credits: 0 };
+    const { id: userId } = await requireUser().catch(() => ({ id: "" }));
+    if (!userId) return { credits: 0 };
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
