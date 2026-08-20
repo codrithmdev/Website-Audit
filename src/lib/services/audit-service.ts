@@ -123,17 +123,29 @@ export const getAuditStatus = createServerFn({ method: "GET" })
     if (!isConfigured()) {
       throw new Error("Audit service is not configured yet.");
     }
-    await requireUser();
+    const { id: userId } = await requireUser();
 
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("audits")
       .select(
-        "id,status,overall_score,report_json,screenshot_url,pdf_report_url,error_message,target_url",
+        "id,user_id,status,overall_score,report_json,screenshot_url,pdf_report_url,error_message,target_url",
       )
       .eq("id", auditId)
       .single();
     if (error) throw error;
+
+    if (data.user_id !== userId) {
+      // Not the owner — only allow if this is a live, unexpired cache hit
+      // (the same shared behavior startAudit's domain_cache lookup grants).
+      const { data: cacheHit } = await supabase
+        .from("domain_cache")
+        .select("audit_id")
+        .eq("audit_id", auditId)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
+      if (!cacheHit) throw new Error("NOT_FOUND");
+    }
 
     return {
       status: data.status,
