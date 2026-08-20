@@ -5,7 +5,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { auditResultSchema, type AuditResult } from "@/lib/schemas/audit";
 import { pdf } from "@react-pdf/renderer";
 import { AuditPDFDocument } from "@/components/pdf/AuditPDFDocument";
-import crypto from "crypto";
+import { hashAuditUrl, extractAuditDomain } from "@/lib/audit-url";
 import { capturePageData } from "@/lib/scraper/browser";
 import { runLighthouseAudit } from "@/lib/scraper/lighthouse";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
@@ -124,11 +124,8 @@ export const runGrowthAudit = task({
       // ----------------------------------------------------------------------
       // STEP 5: Database Commit, Credit Deduction & Domain Cache
       // ----------------------------------------------------------------------
-      const urlHash = crypto
-        .createHash("sha256")
-        .update(targetUrl.toLowerCase().trim())
-        .digest("hex");
-      const domain = new URL(targetUrl).hostname;
+      const urlHash = hashAuditUrl(targetUrl);
+      const domain = extractAuditDomain(targetUrl);
 
       // Update Audit Record
       const { error: auditUpdateError } = await supabaseAdmin
@@ -148,22 +145,11 @@ export const runGrowthAudit = task({
         .eq("id", auditId);
       if (auditUpdateError) throw auditUpdateError;
 
-      // Post-commit housekeeping (credit deduction + domain cache). These
-      // failures must NOT flip the audit to failed: the report is already
-      // committed and downloadable, so surface the issue without destroying it.
-      try {
-        const { error: rpcError } = await supabaseAdmin.rpc("deduct_user_credit", {
-          p_user_id: userId,
-          p_audit_id: auditId,
-        });
-        if (rpcError) throw rpcError;
-      } catch (deductionErr) {
-        console.error(
-          `[run-growth-audit] credit deduction failed for audit ${auditId}:`,
-          deductionErr,
-        );
-      }
-
+      // The credit was already reserved atomically when the audit was created
+      // (see startAudit in audit-service.ts), so no deduction happens here.
+      // Post-commit housekeeping (domain cache) below must NOT flip the audit
+      // to failed: the report is already committed and downloadable, so
+      // surface the issue without destroying it.
       try {
         const { error: cacheError } = await supabaseAdmin.from("domain_cache").upsert({
           url_hash: urlHash,
@@ -188,6 +174,19 @@ export const runGrowthAudit = task({
           error_message: message,
         })
         .eq("id", auditId);
+
+      // The credit was reserved up-front at audit creation; since the audit
+      // didn't complete, refund it rather than charging the user for a
+      // failed run.
+      try {
+        const { error: refundError } = await supabaseAdmin.rpc("refund_audit_credit", {
+          p_user_id: userId,
+          p_audit_id: auditId,
+        });
+        if (refundError) throw refundError;
+      } catch (refundErr) {
+        console.error(`[run-growth-audit] credit refund failed for audit ${auditId}:`, refundErr);
+      }
 
       throw err;
     }

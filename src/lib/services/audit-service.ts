@@ -1,9 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { tasks } from "@trigger.dev/sdk/v3";
 import { z } from "zod";
-import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/client";
 import { getSupabaseAuth } from "@/lib/supabase/auth";
+import { hashAuditUrl, extractAuditDomain } from "@/lib/audit-url";
 import type { AuditResult } from "@/lib/schemas/audit";
 
 async function requireUser(): Promise<{ id: string }> {
@@ -69,8 +69,8 @@ export const startAudit = createServerFn({ method: "POST" })
     const { id: userId } = await requireUser();
 
     const supabase = getSupabaseAdmin();
-    const urlHash = crypto.createHash("sha256").update(targetUrl.toLowerCase()).digest("hex");
-    const domain = targetUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const urlHash = hashAuditUrl(targetUrl);
+    const domain = extractAuditDomain(targetUrl);
 
     // Domain cache lookup — 0-credit instant return for cached reports.
     const { data: cached } = await supabase
@@ -83,7 +83,9 @@ export const startAudit = createServerFn({ method: "POST" })
       return { auditId: cached.audit_id, cached: true };
     }
 
-    // Credit balance verification guard.
+    // Cheap pre-check for a fast, friendly error — the real enforcement is the
+    // atomic RPC below, which is what actually prevents a credit race under
+    // concurrent requests.
     const { data: profile } = await supabase
       .from("profiles")
       .select("credits_balance")
@@ -93,7 +95,8 @@ export const startAudit = createServerFn({ method: "POST" })
       throw new Error("INSUFFICIENT_CREDITS");
     }
 
-    // Create the audit record (deduction happens in the background task).
+    // Create the audit record first so the credit-deduction ledger can
+    // reference it.
     const { data: audit, error } = await supabase
       .from("audits")
       .insert({
@@ -106,6 +109,20 @@ export const startAudit = createServerFn({ method: "POST" })
       .select()
       .single();
     if (error) throw error;
+
+    // Atomically reserve the credit *before* dispatching the (expensive)
+    // pipeline. deduct_user_credit locks the profile row and fails if the
+    // balance is insufficient, so concurrent requests can't both pass the
+    // pre-check above and run a paid pipeline on a single credit. The
+    // pipeline refunds this credit if the audit later fails.
+    const { error: creditError } = await supabase.rpc("deduct_user_credit", {
+      p_user_id: userId,
+      p_audit_id: audit.id,
+    });
+    if (creditError) {
+      await supabase.from("audits").delete().eq("id", audit.id);
+      throw new Error("INSUFFICIENT_CREDITS");
+    }
 
     // Dispatch the background pipeline.
     await tasks.trigger("run-growth-audit", {
