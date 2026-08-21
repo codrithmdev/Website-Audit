@@ -8,10 +8,16 @@
 -- pipeline against a single credit. It means a failed pipeline run must
 -- refund the credit it reserved, so add a dedicated transaction type and RPC
 -- for that.
+--
+-- NOTE: on the deployed project, credit_transactions.type is a Postgres enum
+-- `transaction_type`, not text+check as 0001_init.sql describes (see the
+-- "Schema drift" note in DEPLOYMENT.md) — so the new value is added to the
+-- enum directly. This statement must run as its own top-level statement (not
+-- inside a transaction block / DO block / function) — Postgres forbids
+-- ALTER TYPE ... ADD VALUE inside a subtransaction. If running this file in
+-- the Supabase SQL editor, run this line by itself first, then the rest.
 -- ============================================================================
-alter table public.credit_transactions drop constraint if exists credit_transactions_type_check;
-alter table public.credit_transactions add constraint credit_transactions_type_check
-  check (type in ('signup_bonus', 'purchase', 'subscription_grant', 'audit_deduction', 'audit_refund'));
+alter type public.transaction_type add value if not exists 'audit_refund';
 
 create or replace function public.refund_audit_credit(p_user_id uuid, p_audit_id uuid)
 returns void
