@@ -21,7 +21,7 @@
 | Lighthouse Audit             | ✅ Live          | Performance/a11y/SEO scores written to `report_json.technicalPerformance` |
 | AI Analysis                  | ✅ Live          | OpenRouter Gemma 4 free vision, retries 3× on schema-validation failures |
 | PDF Generation               | ✅ Live          | `AuditPDFDocument` component, uploaded to `audit-reports` storage bucket |
-| Database (Supabase)          | ✅ Live          | Migrations `0001`–`0003` written; `0001` applied to project `dxezxcjylbpkmlmvqjxo`, `0002`/`0003` pending push (see Known Issues) |
+| Database (Supabase)          | ✅ Live          | Migrations `0001`–`0003` applied to project `dxezxcjylbpkmlmvqjxo` |
 | Credit Accounting            | ✅ Fixed         | Reserved atomically at audit creation (`deduct_user_credit` RPC), refunded on pipeline failure (`refund_audit_credit` RPC) — closes a prior race where concurrent requests could run the full pipeline on a single credit |
 | Server Functions             | ✅ Live          | `startAudit`/`getAuditStatus`/`getMyAudits`/`getProfile` (session-based)  |
 | Authentication               | ✅ Live          | Supabase email/password + SSR sessions (`@supabase/ssr` + cookie-bound client) |
@@ -88,7 +88,7 @@
 
 6. **Removed `.scratch/`** — ad-hoc Playwright test scripts and screenshots used to verify the redesign; not meant to be tracked.
 
-> Migrations `0002` and `0003` are written but **not yet applied to the remote database** — the project isn't `supabase link`-ed from this machine (no DB password available). Run `supabase db push` or paste the SQL into the dashboard SQL editor before relying on these fixes in production.
+> Migrations `0002` and `0003` have been applied to the remote database via the Supabase SQL editor (Aug 21, 2026). Note `0003`'s enum-value addition (`transaction_type` → `audit_refund`) had to run as its own statement, separate from the function/policy statements — see the migration file's header comment for why.
 
 ---
 
@@ -103,7 +103,6 @@
 | Test users can hit 0 credits                           | Medium   | No self-serve top-up yet; credits granted manually in Supabase |
 | Stripe billing skipped                                 | Medium   | Payment/Checkout flows not implemented                      |
 | Rate limiting (10 audits/hour/IP) not enforced         | Medium   | PRD requirement, not yet implemented                        |
-| Migrations `0002`/`0003` not yet pushed to remote      | Medium   | Written locally; project isn't `supabase link`-ed from this machine (no DB password) — apply via `supabase db push` or the dashboard SQL editor |
 | `audits.domain` column absent from original migration  | Resolved | Migration updated; remote already had the column            |
 | Credit deduction race (concurrent requests could run the pipeline on one credit) | Resolved | `startAudit` now reserves the credit atomically before dispatching the pipeline; refunded on failure |
 | `domain_cache` publicly readable via anon key           | Resolved | `0002_lock_domain_cache.sql` drops the public SELECT policy |
@@ -115,9 +114,8 @@
 
 1. **Credit top-up / billing** — either manual credit grants (current) or Stripe checkout + portal + webhooks.
 2. **Rate limiting** — per-IP audit limits (10/hour target per PRD).
-3. **Push migrations `0002`/`0003` to the remote Supabase project** — `supabase link` + `supabase db push`, or paste into the dashboard SQL editor.
-4. **(Optional) CI/CD** — lint + typecheck + build on push; deploy hooks.
-5. **(Optional) Upgrade AI model** — switch from free Gemma to a paid model for more reliable structured output.
+3. **(Optional) CI/CD** — lint + typecheck + build on push; deploy hooks.
+4. **(Optional) Upgrade AI model** — switch from free Gemma to a paid model for more reliable structured output.
 
 ---
 
@@ -129,7 +127,7 @@
 - [x] Run an end-to-end audit with real Trigger.dev + API keys
 - [x] Lock down `domain_cache` RLS policy (`0002`)
 - [x] Fix credit-deduction race condition + lock down storage upload policy (`0003`)
-- [ ] Push migrations `0002`/`0003` to the remote Supabase project
+- [x] Push migrations `0002`/`0003` to the remote Supabase project
 - [ ] Implement credit top-up / Stripe billing
 - [ ] Enforce rate limiting (10 audits/hour/IP)
 - [ ] (Optional) CI/CD pipeline
