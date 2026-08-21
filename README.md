@@ -38,10 +38,20 @@ GrowthLens takes a website URL and produces a prioritized, business-first action
 ```
 src/
 ├── components/
-│   ├── pdf/AuditPDFDocument.tsx  # Server-rendered report PDF (@react-pdf/renderer)
-│   └── ui/                       # shadcn/ui components
-├── hooks/                        # Custom React hooks
+│   ├── growth-lens/               # Product UI (redesign)
+│   │   ├── landing.tsx            # Hero, nav, sample audit preview, pricing section
+│   │   ├── dashboard.tsx          # Workspace overview, audit history
+│   │   ├── report.tsx             # Score ring, tabbed findings (UX/Trust/Performance/SEO)
+│   │   ├── processing.tsx         # Step-by-step progress view
+│   │   ├── pricing.tsx            # Pricing tiers
+│   │   ├── auth-dialog.tsx        # Sign in / create account modal
+│   │   ├── upgrade-modal.tsx      # Out-of-credits upsell modal
+│   │   └── brand.tsx              # Shared brand/logo mark
+│   ├── pdf/AuditPDFDocument.tsx   # Server-rendered report PDF (@react-pdf/renderer)
+│   └── ui/                        # shadcn/ui components
+├── hooks/                         # Custom React hooks
 ├── lib/
+│   ├── audit-url.ts              # Shared URL hashing + domain extraction (cache key consistency)
 │   ├── schemas/audit.ts          # Zod schema for AI audit output
 │   ├── scraper/
 │   │   ├── browser.ts            # Playwright + Browserless.io page scraper
@@ -51,20 +61,25 @@ src/
 │   │   └── auth-service.ts       # Server functions (signUp/signIn/signOut/getSession)
 │   ├── supabase/
 │   │   ├── auth.ts               # SSR cookie-bound Supabase client (getSupabaseAuth/clearAuthCookies)
+│   │   ├── browser.ts            # Client-side Supabase client (getSupabaseBrowser)
 │   │   └── client.ts             # Admin/anon Supabase clients
+│   ├── types/growth-lens.ts      # Shared frontend types (View, AuthUser, AuditResultState, MyAuditRow)
 │   ├── utils.ts                  # cn() utility (clsx + tailwind-merge)
 │   ├── error-page.ts             # Static HTML error page renderer
 │   └── error-capture.ts          # Server-side error capture
 ├── routes/
 │   ├── __root.tsx                # Root layout, error boundary, 404 page
-│   └── index.tsx                 # Main app UI (Landing + Processing + Report + Dashboard)
+│   └── index.tsx                 # App state machine wiring Landing/Processing/Report/Dashboard
 ├── trigger/audit-pipeline1.ts    # Full Trigger.dev audit pipeline
 ├── styles.css                    # Tailwind v4 design system
 ├── router.tsx                    # TanStack Router factory
 ├── server.ts                     # SSR server entry
 └── start.ts                      # TanStack Start setup
 
-supabase/migrations/0001_init.sql  # Schema + RLS + RPCs + storage buckets
+supabase/migrations/
+├── 0001_init.sql                                 # Schema + RLS + RPCs + storage buckets
+├── 0002_lock_domain_cache.sql                     # Removes public SELECT policy on domain_cache
+└── 0003_credit_refund_and_storage_lockdown.sql    # audit_refund RPC + drops open storage INSERT policy
 ```
 
 ## Getting Started
@@ -122,31 +137,34 @@ Create a `.env.local` file. There is **no demo mode** — the app requires real 
 
 The full product is built, deployed, and running live at [https://website-audit.vercel.app/](https://website-audit.vercel.app/). Real audits run end-to-end through the Trigger.dev **prod** worker:
 
-1. Browserless scrape + screenshot
-2. Lighthouse performance/a11y/SEO scores
-3. OpenRouter Gemma 4 vision analysis (structured output)
-4. Weighted growth score + PDF generation
-5. Supabase commit with credit deduction + domain cache
+1. Credit reserved atomically at audit creation
+2. Browserless scrape + screenshot
+3. Lighthouse performance/a11y/SEO scores
+4. OpenRouter Gemma 4 vision analysis (structured output)
+5. Weighted growth score + PDF generation
+6. Supabase commit + domain cache (credit refunded automatically if any step fails)
 
 Auth (email/password + SSR sessions), real PDFs/screenshots in the Report view, and the audit dashboard all work against the live database.
 
 **Still remaining** — see [implementation.md](implementation.md) and [PROJECT-STATUS.md](PROJECT-STATUS.md). In short:
 1. Grant/renew credits for test users (deduction requires a positive balance)
-2. Enforce credit RLS / rate limiting
+2. Rate limiting on audit creation
 3. Stripe billing + CI/CD (post-MVP)
 
 ## Audit Pipeline
 
-The background audit pipeline (`src/trigger/audit-pipeline1.ts`) runs the following steps:
+Credits are reserved **atomically at audit creation**, before the pipeline runs — `startAudit` (`src/lib/services/audit-service.ts`) creates the `pending` audit row and immediately calls the `deduct_user_credit` RPC, which row-locks the profile and fails the whole request if the balance is insufficient. This closes a race where two concurrent requests could both pass a plain balance check and run the full (expensive) pipeline against a single credit.
+
+The background pipeline (`src/trigger/audit-pipeline1.ts`) then runs:
 
 1. **Scrape & Screenshot** — Playwright + Browserless.io captures page content and screenshots
 2. **Lighthouse Audit** — Performance, accessibility, and SEO scores
 3. **AI Analysis** — OpenRouter Gemma 4 (free vision model) generates structured findings (trust, friction, CTA, clarity scores); retries up to 3× when the model's output fails schema validation
 4. **Growth Score** — Weighted composite: Trust (30%) + Friction (30%) + CTA (20%) + Tech/SEO (20%)
 5. **PDF Generation** — Professional report via @react-pdf/renderer
-6. **Database Commit** — Stores results in Supabase with credit deduction and domain caching
+6. **Database Commit** — Stores results in Supabase and writes the domain cache entry
 
-Post-commit failures (credit deduction or domain-cache write) are logged but never flip a committed report to `failed` — the audit stays `completed` so the report/PDF remain downloadable.
+If the pipeline fails at any step, the audit is marked `failed` and the reserved credit is refunded via the `refund_audit_credit` RPC (logged, non-fatal if it errors). Domain-cache write failures are logged but never flip a committed report to `failed` — the audit stays `completed` so the report/PDF remain downloadable.
 
 ## App Views
 

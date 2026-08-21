@@ -1,7 +1,7 @@
 # Implementation Roadmap — Codrithm Audit AI
 
 **Product:** AI-assisted Website Growth Diagnostic Platform
-**Last Updated:** August 14, 2026
+**Last Updated:** August 21, 2026
 
 ---
 
@@ -13,14 +13,15 @@
 
 | Area | Status |
 | :--- | :--- |
-| Frontend (Landing / Processing / Report / Dashboard) | Complete |
+| Frontend (`src/components/growth-lens/*`: Landing / Processing / Report / Dashboard / Auth dialog / Upgrade modal) | Complete, redesigned |
 | Design system (Tailwind v4, light/dark, responsive) | Complete |
 | Audit pipeline (`src/trigger/audit-pipeline1.ts`, 6 steps) | Live, verified E2E |
 | Scraper (Browserless + Playwright) | Live |
 | Lighthouse audit | Live (scores in `report_json.technicalPerformance`) |
 | AI analysis (OpenRouter Gemma 4 free vision, 3× retry) | Live |
 | PDF engine (`AuditPDFDocument.tsx` + Zod schema) | Live (uploads to `audit-reports` bucket) |
-| Supabase migration (tables, RLS, RPCs, buckets) | Applied to project `dxezxcjylbpkmlmvqjxo` |
+| Supabase migration (tables, RLS, RPCs, buckets) | `0001` applied to project `dxezxcjylbpkmlmvqjxo`; `0002`/`0003` written, pending push to remote |
+| Credit accounting | Fixed — reserved atomically at audit creation, refunded on pipeline failure (closes prior race) |
 | Server functions (`startAudit` / `getAuditStatus` / `getMyAudits` / `getProfile`) | Live, session-based |
 | Auth (email/password + SSR sessions) | Live (`signUp`/`signIn`/`signOut`/`getSession`) |
 | Type safety (`tsc --noEmit` clean) + production build | Passing |
@@ -38,8 +39,11 @@
 
 ### 2. Backend Hardening
 
+- `[x]` **`domain_cache` RLS policy** — public SELECT policy dropped (`0002_lock_domain_cache.sql`); only the service-role client reads it now.
+- `[x]` **Credit-deduction race condition** — credits are now reserved atomically at audit creation and refunded on failure, instead of deducted after the pipeline completes (`0003_credit_refund_and_storage_lockdown.sql`).
+- `[x]` **`storage.objects` upload policy** — dropped the INSERT policy that let any authenticated user upload to `audit-assets`/`audit-reports`; all uploads go through the service-role worker (`0003`).
+- `[ ]` **Push `0002`/`0003` to the remote Supabase project** — written locally but not yet applied; needs `supabase link` (DB password) + `supabase db push`, or the dashboard SQL editor.
 - `[ ]` **Rate limiting** — per-IP audit limits (10/hour target per PRD).
-- `[ ]` **`domain_cache` RLS policy** — lock down so cached reports are readable without exposing other users' data.
 - `[ ]` **Consider switching AI model** — the free Gemma model intermittently returns output that fails schema validation (mitigated with a 3× retry). A paid model via `OPENROUTER_MODEL` would be more reliable.
 
 ### 3. Report Polish
@@ -58,7 +62,8 @@
 
 ## Priority Order
 
-1. Credit top-up (Stripe or admin) so users aren't blocked at 0 credits
-2. Enforce rate limiting + `domain_cache` RLS
-3. (Optional) Paid AI model for more reliable structured output
-4. (Optional) CI/CD + Stripe webhooks + PDF annotation polish
+1. Push migrations `0002`/`0003` to the remote Supabase project
+2. Credit top-up (Stripe or admin) so users aren't blocked at 0 credits
+3. Enforce rate limiting
+4. (Optional) Paid AI model for more reliable structured output
+5. (Optional) CI/CD + Stripe webhooks + PDF annotation polish

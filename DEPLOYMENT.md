@@ -66,9 +66,11 @@ The task id `run-growth-audit` (`src/trigger/audit-pipeline1.ts`) matches what `
 ## 4. Supabase (needed for real audits)
 
 1. Create a Supabase project.
-2. Run the migration `supabase/migrations/0001_init.sql` (tables, RLS, RPCs, storage buckets).
+2. Run the migrations **in order** — `supabase/migrations/0001_init.sql`, then `0002_lock_domain_cache.sql`, then `0003_credit_refund_and_storage_lockdown.sql` — via `supabase db push` (after `supabase link`) or the dashboard SQL editor. `0001` creates the schema, RLS, RPCs, and storage buckets; `0002` locks down `domain_cache`'s public read policy; `0003` adds the `refund_audit_credit` RPC (required for the atomic credit-reservation flow in `startAudit`) and locks down the storage upload policy.
 3. Create storage buckets `audit-assets` and `audit-reports` if not created by the migration.
 4. Paste `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` into Vercel (§2).
+
+> ⚠️ Without `0003` applied, `startAudit` will still reserve credits correctly, but any *failed* audit will fail to refund its credit (the `refund_audit_credit` RPC won't exist) — that failure is caught and logged, not fatal, but the user loses a credit on a failed run until the migration is applied.
 
 ### Schema drift notes
 
@@ -88,6 +90,7 @@ Auth is Supabase email/password. The app uses `@supabase/ssr` with a cookie-boun
 | Audit stuck in demo mode          | No demo mode exists — `startAudit` throws if Supabase env vars are missing |
 | `startAudit` throws                | Missing `TRIGGER_SECRET_KEY` (or it's a `tr_dev_...` key), or the Trigger.dev worker isn't deployed to prod |
 | Sign-in/sign-up fail on Vercel     | `SUPABASE_ANON_KEY` not set in Vercel env (needed by the SSR auth client) |
-| Audit marked `failed` but PDF exists | Post-commit errors (e.g. credit deduction) no longer flip committed audits to `failed`; deploy the latest worker |
+| Audit marked `failed` but PDF exists | Post-commit domain-cache write errors no longer flip committed audits to `failed`; deploy the latest worker |
+| Failed audit didn't refund the credit | `refund_audit_credit` RPC missing — apply migration `0003_credit_refund_and_storage_lockdown.sql` |
 | Audit stuck `QUEUED` / `pending`   | Worker not deployed to prod, or `TRIGGER_SECRET_KEY` is a dev-scoped `tr_dev_...` token |
 | `null value in column "domain"`    | Remote `audits` table requires `domain`; use the current `startAudit` (it derives `domain` from the URL) |

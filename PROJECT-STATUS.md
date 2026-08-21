@@ -1,7 +1,7 @@
 # Project Status — GrowthLens (Codrithm Audit AI)
 
-**Last Updated:** Aug 14, 2026
-**Stage:** Live MVP — deployed, real audits working end-to-end on the Trigger.dev prod worker, real Supabase auth wired.
+**Last Updated:** Aug 21, 2026
+**Stage:** Live MVP — deployed, real audits working end-to-end on the Trigger.dev prod worker, real Supabase auth wired, frontend redesign shipped.
 
 ---
 
@@ -9,7 +9,7 @@
 
 | Area                         | Status           | Notes                                                                     |
 | ---------------------------- | ---------------- | ------------------------------------------------------------------------- |
-| Frontend UI                  | ✅ Complete      | Landing, Processing, Report, Dashboard views wired to server functions   |
+| Frontend UI                  | ✅ Complete      | Redesigned as `src/components/growth-lens/*`; Landing, Processing, Report, Dashboard, Auth dialog, Upgrade modal wired to server functions |
 | Design System                | ✅ Complete      | Tailwind v4 with 30+ custom utilities, light/dark themes, responsive      |
 | Landing Page                 | ✅ Complete      | Hero, features, sample report preview, pricing section, mobile nav        |
 | Processing View              | ✅ Complete      | Step-by-step progress animation, polls real audit status                  |
@@ -21,7 +21,8 @@
 | Lighthouse Audit             | ✅ Live          | Performance/a11y/SEO scores written to `report_json.technicalPerformance` |
 | AI Analysis                  | ✅ Live          | OpenRouter Gemma 4 free vision, retries 3× on schema-validation failures |
 | PDF Generation               | ✅ Live          | `AuditPDFDocument` component, uploaded to `audit-reports` storage bucket |
-| Database (Supabase)          | ✅ Live          | Migration applied; project `dxezxcjylbpkmlmvqjxo`; credit deduction works |
+| Database (Supabase)          | ✅ Live          | Migrations `0001`–`0003` written; `0001` applied to project `dxezxcjylbpkmlmvqjxo`, `0002`/`0003` pending push (see Known Issues) |
+| Credit Accounting            | ✅ Fixed         | Reserved atomically at audit creation (`deduct_user_credit` RPC), refunded on pipeline failure (`refund_audit_credit` RPC) — closes a prior race where concurrent requests could run the full pipeline on a single credit |
 | Server Functions             | ✅ Live          | `startAudit`/`getAuditStatus`/`getMyAudits`/`getProfile` (session-based)  |
 | Authentication               | ✅ Live          | Supabase email/password + SSR sessions (`@supabase/ssr` + cookie-bound client) |
 | Stripe Payments              | ⏭️ Skipped       | Portal/webhook endpoints intentionally skipped; credits granted manually |
@@ -46,7 +47,7 @@
 
 - **Trigger.dev token scoping:** only `tr_prod_...` keys reach the deployed prod worker. A `tr_dev_...` key leaves runs `QUEUED` forever.
 - **Schema drift handled:** remote `audits` table has NOT NULL `domain` (inserts include it); `credit_transactions.type` is enum `transaction_type` (`signup_bonus | purchase | subscription_grant | audit_deduction`).
-- **Worker robustness:** AI step retries 3× on invalid schema output; post-commit failures (credit deduction / domain cache) are logged and never flip a committed audit to `failed`.
+- **Worker robustness:** AI step retries 3× on invalid schema output. Credits are reserved atomically before the pipeline runs and refunded automatically if it fails; domain-cache write failures are logged and never flip a committed audit to `failed`.
 
 ---
 
@@ -73,6 +74,22 @@
    - `src/lib/services/audit-service.ts`: `requireUser()` from the SSR session; `startAudit` throws `AUTH_REQUIRED` when logged out; demo-mode fallback removed.
    - `src/routes/index.tsx`: session state from `getSession`, email/password auth dialog (signin/signup modes), sign-out wired (header/mobile/dashboard), demo rows + hardcoded credits removed, Report shows real Lighthouse breakdown, dashboard empty state added.
 
+## Aug 21 Session — Frontend Redesign + Backend Fixes
+
+1. **Frontend redesign** — rebuilt the app UI as `src/components/growth-lens/*` (`landing.tsx`, `dashboard.tsx`, `report.tsx`, `processing.tsx`, `pricing.tsx`, `auth-dialog.tsx`, `upgrade-modal.tsx`, `brand.tsx`), with shared types moved to `src/lib/types/growth-lens.ts`. `src/routes/index.tsx` now just wires the state machine to these components. Verified end-to-end with Playwright: landing → sign-in dialog → create-account switch → pricing → upgrade modal, no console errors.
+
+2. **Fixed `.env.local` naming mismatch** — it had Next.js-style `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` (leftover from an earlier setup) while the code reads plain `SUPABASE_URL`/`SUPABASE_ANON_KEY`, which silently broke the browser Supabase client. Renamed to match; not tracked by git, so this only fixes it locally — check any deployment secrets for the same stale naming.
+
+3. **Closed the credit-deduction race condition** — `startAudit` previously checked the credit balance, then deducted only *after* the pipeline completed, so concurrent requests could both pass the check and run the full (expensive) pipeline against a single credit. Credits are now reserved atomically via `deduct_user_credit` right after the audit row is created and before the pipeline is dispatched; the pipeline refunds via a new `refund_audit_credit` RPC if it fails. See `src/lib/services/audit-service.ts`, `src/trigger/audit-pipeline1.ts`, `supabase/migrations/0003_credit_refund_and_storage_lockdown.sql`.
+
+4. **Locked down the storage upload policy** — `storage.objects` had an `INSERT` policy letting any authenticated user (via the public anon key + their session JWT) upload to `audit-assets`/`audit-reports`, even though all real uploads go through the service-role worker (bypasses RLS). Same class of issue `0002` fixed for `domain_cache`; dropped in `0003`.
+
+5. **Unified URL-hash/domain logic** — `audit-service.ts` and `audit-pipeline1.ts` each computed the cache `url_hash`/`domain` slightly differently. Extracted into `src/lib/audit-url.ts`, used by both.
+
+6. **Removed `.scratch/`** — ad-hoc Playwright test scripts and screenshots used to verify the redesign; not meant to be tracked.
+
+> Migrations `0002` and `0003` are written but **not yet applied to the remote database** — the project isn't `supabase link`-ed from this machine (no DB password available). Run `supabase db push` or paste the SQL into the dashboard SQL editor before relying on these fixes in production.
+
 ---
 
 ## Known Issues & Risks
@@ -86,7 +103,11 @@
 | Test users can hit 0 credits                           | Medium   | No self-serve top-up yet; credits granted manually in Supabase |
 | Stripe billing skipped                                 | Medium   | Payment/Checkout flows not implemented                      |
 | Rate limiting (10 audits/hour/IP) not enforced         | Medium   | PRD requirement, not yet implemented                        |
+| Migrations `0002`/`0003` not yet pushed to remote      | Medium   | Written locally; project isn't `supabase link`-ed from this machine (no DB password) — apply via `supabase db push` or the dashboard SQL editor |
 | `audits.domain` column absent from original migration  | Resolved | Migration updated; remote already had the column            |
+| Credit deduction race (concurrent requests could run the pipeline on one credit) | Resolved | `startAudit` now reserves the credit atomically before dispatching the pipeline; refunded on failure |
+| `domain_cache` publicly readable via anon key           | Resolved | `0002_lock_domain_cache.sql` drops the public SELECT policy |
+| `storage.objects` INSERT policy let any signed-in user upload to audit buckets | Resolved | `0003_credit_refund_and_storage_lockdown.sql` drops the policy; all uploads go through the service-role worker |
 
 ---
 
@@ -94,7 +115,7 @@
 
 1. **Credit top-up / billing** — either manual credit grants (current) or Stripe checkout + portal + webhooks.
 2. **Rate limiting** — per-IP audit limits (10/hour target per PRD).
-3. **Confirm `domain_cache` RLS policy** — cached reports readable without exposing other users' data.
+3. **Push migrations `0002`/`0003` to the remote Supabase project** — `supabase link` + `supabase db push`, or paste into the dashboard SQL editor.
 4. **(Optional) CI/CD** — lint + typecheck + build on push; deploy hooks.
 5. **(Optional) Upgrade AI model** — switch from free Gemma to a paid model for more reliable structured output.
 
@@ -106,9 +127,11 @@
 - [x] Wire real values into `.env.local` (Supabase, Browserless, OpenRouter)
 - [x] Implement authentication (Supabase Auth email/password + SSR sessions)
 - [x] Run an end-to-end audit with real Trigger.dev + API keys
+- [x] Lock down `domain_cache` RLS policy (`0002`)
+- [x] Fix credit-deduction race condition + lock down storage upload policy (`0003`)
+- [ ] Push migrations `0002`/`0003` to the remote Supabase project
 - [ ] Implement credit top-up / Stripe billing
 - [ ] Enforce rate limiting (10 audits/hour/IP)
-- [ ] Verify/lock down `domain_cache` RLS policy
 - [ ] (Optional) CI/CD pipeline
 
 > The consolidated remaining-work list lives in [`implementation.md`](implementation.md).
